@@ -59,9 +59,9 @@ export function Methods({ model }: { model: Model }) {
           only on days without VIIRS.</li>
         <li><b>Seasons</b> did not improve the model and are not used.</li>
         <li><b>Sensitivity:</b> changing one choice at a time (no confidence filter, stricter MODIS confidence, mask without
-          dilation or no mask, 0.005° or 0.02° cells, 2° or 5° tiles, shrinkage 0 to 1000) keeps the country error between
-          2.1% and 3.9% and the 2000s-to-2020s decline between 4.9× and 5.3×. The static-source mask matters most: without it the
-          tile error rises from 7.6% to 8.8%. Full table: <code>scripts/07_sensitivity.py</code> and the README.</li>
+          dilation or no mask, 0.005° or 0.02° cells, 2° or 5° tiles, shrinkage 0 to 1000, separate day and night factors) keeps
+          the country error between 2.1% and 3.9% and the 2000s-to-2020s decline between 4.9× and 5.3×. The static-source mask matters most: without it the
+          tile error rises from 7.6% to 8.8%. Separate day and night factors made every measure worse, so they are not used. Full table: <code>scripts/07_sensitivity.py</code> and the README.</li>
       </ul>
 
       <h3>Uncertainty for any area</h3>

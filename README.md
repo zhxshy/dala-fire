@@ -126,14 +126,17 @@ headline trend; a naive splice gives about 2.3x.
 | Shrinkage 0 | 2.00 | 3.1% | 7.6% | 20.4% | +3.3% / -6.3% | 5.22x |
 | Shrinkage 50 | 2.00 | 3.0% | 7.6% | 20.5% | +3.3% / -6.3% | 5.21x |
 | Shrinkage 1000 | 2.00 | 3.0% | 7.8% | 20.4% | +3.0% / -6.1% | 5.19x |
+| Separate day and night factors | 2.00 | 3.6% | 8.7% | 22.6% | -0.0% / -10.8% | 5.04x |
 
-Across all 11 variants the country error stays between 2.1% and 3.9% (naive splice: 50.8%) and the
+Across all 12 variants the country error stays between 2.1% and 3.9% (naive splice: 50.8%) and the
 decline between 4.9x and 5.3x. The factor itself moves with the cell size (1.70 at 0.02 degrees, 2.76
 at 0.005 degrees) because it converts between definitions, but the accuracy does not depend on it.
 Shrinkage hardly matters (tiles are data-rich); it is kept as a guard for thin tiles. The static mask
 matters most: without it the tile error rises to 8.8% (90th percentile 25.5%) because gas flares in
-the west inflate both sensors differently. No variant is better on every measure, so the baseline was
-not tuned to the test.
+the west inflate both sensors differently. Separate factors for day-only and night cell-days (as some
+harmonizations do) make every measure worse here (country 3.6%, tile 8.7%, 2013 backcast -10.8%), so
+day and night share one factor. No variant is better on every measure, so the baseline was not tuned to
+the test.
 
 `explore/` holds quick looks (national series, the 2012 seam figure). They are not part of the pipeline.
 

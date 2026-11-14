@@ -25,7 +25,7 @@ import pandas as pd
 
 from common import INT
 
-BASE = dict(conf="default", dilate=1, min_static=3, mask=True, res=0.01, tile_deg=3.0, lam=200.0)
+BASE = dict(conf="default", dilate=1, min_static=3, mask=True, res=0.01, tile_deg=3.0, lam=200.0, dn=False)
 VARIANTS = [
     ("baseline", {}),
     ("no confidence filter", {"conf": "none"}),
@@ -39,10 +39,11 @@ VARIANTS = [
     ("shrinkage 0", {"lam": 0.0}),
     ("shrinkage 50", {"lam": 50.0}),
     ("shrinkage 1000", {"lam": 1000.0}),
+    ("separate day and night factors", {"dn": True}),
 ]
 
 raw = pd.read_parquet(INT / "hotspots_all.parquet",
-                      columns=["lat", "lon", "date", "sensor", "conf_raw", "conf_ok", "type"])
+                      columns=["lat", "lon", "date", "sensor", "conf_raw", "conf_ok", "type", "daynight"])
 raw["sensor"] = raw["sensor"].astype(str)
 # the static mask is built from all five sensors, as in 02_grid.py; the fits use Terra, Aqua and S-NPP
 static_pts = raw.loc[raw["type"].isin([2, 3]).fillna(False), ["lat", "lon"]].reset_index(drop=True)
@@ -84,12 +85,19 @@ def celldays(p):
         key = ci * 100000 + cj
         masked = key.isin({i * 100000 + j for i, j in cells})
         keep &= ~masked
-    df = pd.DataFrame({"fam": np.where(is_modis, "M", "V"), "date": raw["date"], "ci": ci, "cj": cj})[keep]
-    df = df.drop_duplicates(["fam", "date", "ci", "cj"])
+    df = pd.DataFrame({"fam": np.where(is_modis, "M", "V"), "date": raw["date"], "ci": ci, "cj": cj,
+                       "night": (raw["daynight"].astype(str) == "N").to_numpy()})[keep]
+    # one row per fire cell-day; night = at least one night detection that day (day-only otherwise)
+    df = df.groupby(["fam", "date", "ci", "cj"], sort=False)["night"].max().reset_index()
     tile_cells = int(round(p["tile_deg"] / p["res"]))
     df["tile"] = (df["ci"] // tile_cells) * 100000 + (df["cj"] // tile_cells)
     df["year"] = df["date"].dt.year
     return df
+
+
+def strata(df, dn):
+    """Fit key: the tile, or the tile split into day-only and night cell-days (a partition, so totals add up)."""
+    return df["tile"] * 10 + df["night"].astype(int) if dn else df["tile"]
 
 
 def fit(tr, lam):
@@ -110,9 +118,11 @@ for name, change in VARIANTS:
     ckey = (p["conf"], p["dilate"], p["min_static"], p["mask"], p["res"], p["tile_deg"])
     if ckey not in cache:
         cache[ckey] = celldays(p)
-    df = cache[ckey]
+    df = cache[ckey].assign(key=lambda d: strata(d, p["dn"]))
     cal = df[df["date"].isin(cal_days)]
-    cnt = cal.groupby(["tile", "year", "fam"]).size().unstack("fam", fill_value=0).reset_index()
+    cnt = (cal.groupby(["key", "tile", "year", "fam"]).size().unstack("fam", fill_value=0).reset_index()
+           .drop(columns="tile").rename(columns={"key": "tile"}))
+    cnt["real_tile"] = cnt["tile"] // 10 if p["dn"] else cnt["tile"]
 
     nat, tile_err = [], []
     for y in range(2012, 2022):
@@ -120,7 +130,8 @@ for name, change in VARIANTS:
         k, table = fit(tr, p["lam"])
         te["p"] = predict(te, k, table)
         nat.append(te["p"].sum() / te["V"].sum() - 1)
-        t = te[te["V"] >= 200]
+        t = te.groupby("real_tile")[["p", "V"]].sum()
+        t = t[t["V"] >= 200]
         tile_err += list((t["p"] / t["V"] - 1).abs())
 
     back = {}
@@ -130,7 +141,8 @@ for name, change in VARIANTS:
         back[y] = 100 * (predict(te, k14, t14).sum() / te["V"].sum() - 1)
 
     k_all, t_all = fit(cnt, p["lam"])
-    early = df[(df["fam"] == "M") & df["date"].isin(early_days)].groupby("tile").size().rename("M").reset_index()
+    early = (df[(df["fam"] == "M") & df["date"].isin(early_days)].groupby("key").size().rename("M")
+             .reset_index().rename(columns={"key": "tile"}))
     early_h = predict(early, k_all, t_all).sum() / 3
     late = (df["fam"].eq("V") & df["date"].isin(late_days)).sum() / 5
 

@@ -2,7 +2,8 @@
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  buildCalendar, climatology, currentComparisons, dailySeries, monthlyPeriods, MONTHS, seasonalProfile, topDays, yearlyPeriods,
+  buildCalendar, climatology, criticalPeriods, currentComparisons, dailySeries, monthlyPeriods, MONTHS, outlook, seasonalProfile,
+  topDays, weekLabel, yearlyPeriods,
 } from './lib/aggregate'
 import { download, hotspotsCsv, seriesCsv, svgToPng } from './lib/csv'
 import {
@@ -25,6 +26,7 @@ const PRESETS: { label: string; regions: string[] }[] = [
   { label: 'Western oil and gas regions', regions: ['West Kazakhstan Region', 'Atyrau Region', 'Mangystau Region', 'Aqtöbe Region'] },
 ]
 const MAX_DOWNLOAD_YEARS = 5
+const fmtN = (v: number) => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '–')
 
 export function App() {
   const [data, setData] = useState<Loaded | null>(null)
@@ -68,6 +70,8 @@ export function App() {
     const ref = years.filter(y => y.year >= 2012 && y.year <= 2021).reduce((a, y) => a + y.harm, 0)
     return { months, years, clim: climatology(months, cal.lastYear), cmp: currentComparisons(daily, cal),
              small: ref < 3000, max: calendarMax(months), season: seasonalProfile(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
+             critical: criticalPeriods(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
+             ahead: outlook(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
              top: topDays(daily, cal, 10, topObserved ? 2012 : 0) }
   }, [data, cal, area, seasonRecent, topObserved])
 
@@ -204,12 +208,30 @@ export function App() {
               <button role="radio" aria-checked={!seasonRecent} className={!seasonRecent ? 'on' : ''} onClick={() => setSeasonRecent(false)}>All years since 2001</button>
               <button role="radio" aria-checked={seasonRecent} className={seasonRecent ? 'on' : ''} onClick={() => setSeasonRecent(true)}>Last 10 years</button>
             </div>
-            <SeasonChart ref={seasonRef} season={view.season} />
+            <div className="cards season-cards">
+              <div className="card">
+                <div className="card-label">Critical periods</div>
+                {view.critical.runs.length ? <>
+                  <div className="card-value small-value">{view.critical.runs.map(([a, b]) => `${weekLabel(a)} – ${weekLabel(b, true)}`).join(' · ')}</div>
+                  <div className="card-ref">{view.critical.weeks} weeks hold {Math.round(100 * view.critical.share)}% of the usual burning ({view.season.refYears[0]}–{view.season.refYears[1]}).</div>
+                </> : <div className="card-ref">No fire detected here in the reference years.</div>}
+              </div>
+              <div className="card">
+                <div className="card-label">Next 4 weeks ({view.ahead.from} – {view.ahead.to}) usually bring</div>
+                {view.ahead.nRef >= 5 ? <>
+                  <div className="card-value">{fmtN(view.ahead.median)} <small>fire cell-days (median)</small></div>
+                  <div className="card-ref">Usual range {fmtN(view.ahead.p10)}–{fmtN(view.ahead.p90)}; {(view.ahead.shareOfYear || 0) < 0.005 ? 'under 1%' : `about ${Math.round(100 * view.ahead.shareOfYear)}%`} of a year’s burning.</div>
+                </> : <div className="card-ref">Not enough history here to say.</div>}
+              </div>
+            </div>
+            <SeasonChart ref={seasonRef} season={view.season} critical={view.critical} />
             <SeasonLegend season={view.season} />
             <details className="help"><summary>What am I looking at?</summary>
               Harmonized fire cell-days per week in the selected area. The black line is the median week of
               {' '}{view.season.refYears[0]}–{view.season.refYears[1]} and the grey band the 10th–90th percentile of those years: the
-              usual fire season. Fire in Kazakhstan fell sharply after the 2000s, so "Last 10 years" gives a fairer picture of
+              usual fire season. Shaded in orange are the critical periods: the fewest weeks that together hold 75% of the
+              usual burning. "Next 4 weeks" is what the same 28 days brought in the reference years: a seasonal expectation,
+              not a forecast. Fire in Kazakhstan fell sharply after the 2000s, so "Last 10 years" gives a fairer picture of
               what is usual today. The orange line is {view.season.year}, complete weeks only. Kazakhstan usually burns in two waves:
               spring (field and pasture burning before sowing) and late summer to autumn (after the harvest). Weeks with satellite
               outages are left out.

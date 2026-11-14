@@ -230,3 +230,67 @@ export function topDays(s: Daily, cal: Calendar, n = 10, fromYear = 0): TopDay[]
     return { date: iso(k), value: s.harm[k], source: cal.source[k], modelled: !!cal.modelled[k], monthTotal: total }
   })
 }
+
+// --- critical periods: the fewest weeks that hold 75% of the area's usual burning, merged into date runs ---
+export interface CriticalPeriods { runs: [number, number][]; share: number; weeks: number }
+
+export function criticalPeriods(s: Daily, cal: Calendar, refFirst = REF_FIRST, target = 0.75): CriticalPeriods {
+  // mean weekly burning over complete reference years (a share of all burning, so the mean, not the median)
+  const tot = new Float64Array(WEEKS), yrs = new Set<number>()
+  for (let k = 0; k < cal.nDays; k++) {
+    const y = cal.year[k]
+    if (y < refFirst || y >= cal.lastYear) continue
+    tot[weekOfYear(y, cal.month[k], cal.dom[k])] += s.harm[k]; yrs.add(y)
+  }
+  const all = tot.reduce((a, b) => a + b, 0)
+  if (all <= 0) return { runs: [], share: 0, weeks: 0 }
+  const order = Array.from({ length: WEEKS }, (_, w) => w).sort((a, b) => tot[b] - tot[a])
+  const pick = new Uint8Array(WEEKS)
+  let acc = 0
+  for (const w of order) { if (acc / all >= target) break; pick[w] = 1; acc += tot[w] }
+  // close single-week gaps so a season reads as one period
+  for (let w = 1; w < WEEKS - 1; w++) if (!pick[w] && pick[w - 1] && pick[w + 1]) { pick[w] = 1; acc += tot[w] }
+  const runs: [number, number][] = []
+  for (let w = 0; w < WEEKS; w++) {
+    if (!pick[w]) continue
+    if (runs.length && runs[runs.length - 1][1] === w - 1) runs[runs.length - 1][1] = w
+    else runs.push([w, w])
+  }
+  return { runs, share: acc / all, weeks: pick.reduce((a, b) => a + b, 0) }
+}
+
+/** First and last day of a week of year, as "5 Apr". */
+export function weekLabel(w: number, end = false): string {
+  const day = end ? (w === WEEKS - 1 ? 364 : w * 7 + 6) : w * 7
+  const dt = new Date(Date.UTC(2001, 0, 1) + day * 86400000)
+  return `${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}`
+}
+
+// --- outlook: what the next 28 days usually bring, from the same 28 days of earlier years ---
+export interface Outlook {
+  from: string; to: string; median: number; p10: number; p90: number; nRef: number
+  shareOfYear: number   // median share of the year's burning that falls in these 28 days
+}
+
+export function outlook(s: Daily, cal: Calendar, refFirst = REF_FIRST, days = 28): Outlook {
+  const last = cal.nDays - 1, m = cal.month[last], d = cal.dom[last]
+  const sums: number[] = [], shares: number[] = []
+  const yearTotal = new Map<number, number>()
+  for (let k = 0; k < cal.nDays; k++) yearTotal.set(cal.year[k], (yearTotal.get(cal.year[k]) ?? 0) + s.harm[k])
+  for (let k = 0; k < last; k++) {
+    const y = cal.year[k]
+    if (cal.month[k] !== m || cal.dom[k] !== d || y < refFirst || y >= cal.lastYear) continue
+    if (k + days >= cal.nDays) continue
+    let sum = 0, cover = 0
+    for (let j = k + 1; j <= k + days; j++) { sum += s.harm[j]; cover += cal.hasData[j] }
+    if (cover / days < 0.8) continue
+    sums.push(sum)
+    const yt = yearTotal.get(y) ?? 0
+    if (yt > 0) shares.push(sum / yt)
+  }
+  sums.sort((a, b) => a - b); shares.sort((a, b) => a - b)
+  const fmt = (ms: number) => { const dt = new Date(ms); return `${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}` }
+  const t0 = cal.epoch + last * 86400000
+  return { from: fmt(t0 + 86400000), to: fmt(t0 + days * 86400000), median: quantile(sums, 0.5),
+           p10: quantile(sums, 0.1), p90: quantile(sums, 0.9), nRef: sums.length, shareOfYear: quantile(shares, 0.5) }
+}

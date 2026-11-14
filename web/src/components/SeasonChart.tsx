@@ -1,12 +1,12 @@
 // Seasonal profile: weekly fire cell-days, median and 10-90% range of earlier years, current year on top.
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 import { forwardRef } from 'react'
-import { MONTHS, WEEKS, weekOfYear, type Season } from '../lib/aggregate'
+import { MONTHS, WEEKS, weekOfYear, type CriticalPeriods, type Season } from '../lib/aggregate'
 
 const W = 640, H = 240, L = 56, R = 12, T = 14, B = 28
 const CURRENT = '#c4561a', REF = '#1a1a1a'
 
-export const SeasonChart = forwardRef<SVGSVGElement, { season: Season }>(function SeasonChart({ season }, ref) {
+export const SeasonChart = forwardRef<SVGSVGElement, { season: Season; critical?: CriticalPeriods }>(function SeasonChart({ season, critical }, ref) {
   const vals = [...season.p90, ...season.current.map(v => v ?? 0)].filter(v => Number.isFinite(v))
   const { nice, ticks } = axis(Math.max(1, ...vals))
   const sx = (w: number) => L + (w / (WEEKS - 1)) * (W - L - R)
@@ -32,6 +32,10 @@ export const SeasonChart = forwardRef<SVGSVGElement, { season: Season }>(functio
         </g>
       ))}
       {monthTicks.map(({ m, w }) => <text key={m} x={sx(w + 2)} y={H - 8} textAnchor="middle" className="axis">{m}</text>)}
+      {critical?.runs.map(([a, b]) => (
+        <rect key={a} x={sx(Math.max(0, a - 0.5))} y={T} width={sx(Math.min(WEEKS - 1, b + 0.5)) - sx(Math.max(0, a - 0.5))}
+              height={H - T - B} fill={CURRENT} opacity={0.08} />
+      ))}
       <path d={band} fill={REF} opacity={0.12} />
       <path d={path(ws.map(w => [w, season.median[w]]))} fill="none" stroke={REF} strokeWidth={1.8} />
       {segs.map((s, i) => s.length > 1
@@ -52,6 +56,7 @@ export function SeasonLegend({ season }: { season: Season }) {
       <span><i className="line" style={{ borderColor: CURRENT, borderTopWidth: 3 }} /> {season.year}</span>
       <span><i className="line" style={{ borderColor: REF }} /> Median {season.refYears[0]}–{season.refYears[1]}</span>
       <span><i className="swatch" style={{ background: 'rgba(26,26,26,0.12)', borderColor: 'transparent' }} /> Usual range (10–90%)</span>
+      <span><i className="swatch" style={{ background: 'rgba(196,86,26,0.15)', borderColor: 'transparent' }} /> Critical periods</span>
     </div>
   )
 }
