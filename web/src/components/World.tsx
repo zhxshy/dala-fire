@@ -8,6 +8,7 @@ import { loadWorld, worldPeriods, type World as WorldData } from '../lib/world'
 import { AnnualChart, AnnualLegend } from './AnnualChart'
 import { Calendar, CalendarLegend, calendarMax, MODE_LABEL, type Mode } from './Calendar'
 import { MapView, type DrawMode } from './MapView'
+import { fire, FIRE_STOPS } from '../lib/colors'
 
 const WORLD_BOUNDS: [number, number, number, number] = [-170, -55, 180, 75]
 const PRESETS: { label: string; area?: Area; countries?: string[] }[] = [
@@ -25,6 +26,7 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
   const [mode, setMode] = useState<Mode>('harm')
   const [drawMode, setDrawMode] = useState<DrawMode>('none')
   const [bbox, setBbox] = useState({ west: '10', south: '-28', east: '41', north: '-5' })
+  const [month, setMonth] = useState<string | null>(null)   // calendar month shown on the map; none = recent yearly mean
   const calRef = useRef<SVGSVGElement>(null), annRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => { loadWorld().then(setData).catch(e => setError(String(e))) }, [])
@@ -42,6 +44,30 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
              change: late.harm > 0 && late.naive > 0 ? { harm: early.harm / late.harm, naive: early.naive / late.naive, late: [last - 4, last] } : null,
              small: late.harm < 1000 }
   }, [data, area])
+
+  // the map shows where it burns: harmonized fire cell-days per 0.5-degree cell, either one month or the
+  // yearly mean of the last five full years
+  const fireMap = useMemo(() => {
+    if (!data || !view) return null
+    const { cells, model } = data
+    const k = month ? model.months.findIndex(mm => mm.key === month) : -1
+    const first = model.months.findIndex(mm => mm.key === `${view.last - 4}-01`)
+    const sum = new Map<number, number>()
+    for (let i = 0; i < cells.n; i++) {
+      const ok = k >= 0 ? cells.ym[i] === k : cells.ym[i] >= first
+      if (!ok || cells.h[i] <= 0) continue
+      const key = cells.lat[i] * 10000 + cells.lon[i]
+      sum.set(key, (sum.get(key) ?? 0) + cells.h[i] / (k >= 0 ? 1 : 5))
+    }
+    const vals = [...sum.values()].sort((a, b) => a - b)
+    const top = vals.length ? vals[Math.floor(0.99 * (vals.length - 1))] : 1
+    const out: { lon: number; lat: number; color: string }[] = []
+    for (const [key, v] of sum) {
+      const lat = Math.round(key / 10000 * 4) / 4, lon = key - lat * 10000
+      out.push({ lat, lon, color: fire(Math.min(v, top), top) })
+    }
+    return { cells: out, top, label: month ?? `${view.last - 4}–${view.last}, yearly mean`, per: month ? 'month' : 'year' }
+  }, [data, view, month])
 
   if (error) return <p className="warn">Could not load the world layer: {error}</p>
   if (!data || !view) return <p>Loading the world layer…</p>
@@ -108,9 +134,15 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
 
       <section className="panel mapbox">
         <MapView regions={data.countries} area={area} hotspots={[]} staticMask={null} drawMode={drawMode} bounds={WORLD_BOUNDS}
+                 cells={fireMap?.cells} cellDeg={model.grid.res_deg}
                  attribution="Fire data: NASA FIRMS · Countries: Natural Earth"
                  onDrawDone={a => { onArea(a); setDrawMode('none') }} onRegionClick={pick} />
-        <div className="row small"><span>Click a country, or draw an area. {view.cellsUsed.toLocaleString('en-US')} month-cells in the selection.</span></div>
+        <div className="legend">
+          <span className="ramp"><span>Harmonized fire cell-days per {model.grid.res_deg}° cell and {fireMap?.per}, {fireMap?.label}: few</span>
+            {FIRE_STOPS.map(c => <i key={c} style={{ background: c }} />)}<span>{Math.round(fireMap?.top ?? 0).toLocaleString('en-US')}+</span></span>
+          {month && <button onClick={() => setMonth(null)}>Back to the yearly mean</button>}
+        </div>
+        <div className="row small"><span>Click a country, or draw an area. Click a month in the calendar to map it.</span></div>
       </section>
 
       <section className="panel">
@@ -140,7 +172,7 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
             <button key={k} role="radio" aria-checked={mode === k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>{MODE_LABEL[k]}</button>
           ))}
         </div>
-        <div className="scroll"><Calendar ref={calRef} months={view.months} clim={view.clim} mode={mode} selected={null} onSelect={() => {}} /></div>
+        <div className="scroll"><Calendar ref={calRef} months={view.months} clim={view.clim} mode={mode} selected={month} onSelect={k => setMonth(k === month ? null : k)} /></div>
         <CalendarLegend mode={mode} max={view.max} />
         <details className="help"><summary>What am I looking at?</summary>
           One cell per month, in fire cell-days: 0.01° cells with at least one clean detection on a day, summed over the area.

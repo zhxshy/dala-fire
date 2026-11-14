@@ -26,5 +26,12 @@ export const sequential = (value: number, max: number) =>
 /** Diverging colour for an anomaly in units of the p10-p90 spread, clipped to +-1. */
 export const diverging = (a: number) => interpolate(DIVERGING, (Math.max(-1, Math.min(1, a)) + 1) / 2)
 
+// one warm hue, light -> dark, for fire amounts drawn on a light map
+const FIRE = ['#fde6c4', '#f6b97a', '#e8873f', '#c75a1a', '#8f3405', '#5a1e00']
+
+/** Fire colour for a map cell, on a log scale relative to `max`. */
+export const fire = (value: number, max: number) => interpolate(FIRE, max > 0 ? Math.log1p(value) / Math.log1p(max) : 0)
+export const FIRE_STOPS = FIRE
+
 export const NO_DATA = '#cfcfcf'
 export const SENSOR_COLORS = { MODIS: '#dc7a35', VIIRS: '#2d4f8f' }

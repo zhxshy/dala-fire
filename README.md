@@ -1,7 +1,8 @@
 # Dala Fire
 
-**One satellite fire record for Kazakhstan, 2000 to today.** NASA MODIS and VIIRS active-fire detections,
-harmonized onto one scale and served as a burning-activity calendar for any area of the country.
+**One satellite fire record, 2000 to today: Kazakhstan in depth, the whole world by month.** NASA MODIS and
+VIIRS active-fire detections, harmonized onto one scale and served as a burning-activity calendar for any area:
+by day for Kazakhstan, by month on a 0.5-degree grid for every country.
 
 Built for the NASA Space Apps Challenge 2026, challenge *Harmonization of MODIS and VIIRS Hot Spots*,
 by team Thermal Fusion (Zhoshy Khalelov, Zhangir Abay).
@@ -49,6 +50,35 @@ burning changed, not why. Single days and weeks before 2012 are less certain tha
 [the jump in the naive record](https://zhxshy.github.io/dala-fire/#m=naive) ·
 [Kostanay Region, 3 September 2022](https://zhxshy.github.io/dala-fire/#a=KZ-39&d=2022-09-03&top=viirs) ·
 [methods and validation](https://zhxshy.github.io/dala-fire/#tab=methods)
+
+## World layer (`scripts/w1_fetch.py`, `scripts/w2_world.py`)
+
+The same method, with nothing retuned, run on the FIRMS yearly files for every country: 548 million detections,
+2001-2025, about 200-229 countries a year. Fire cell-days are still counted on 0.01-degree cells; factors are fitted
+per 3-degree tile (2,643 tiles), and the record is stored by month on a 0.5-degree grid. The app's World tab
+shows it for any country or drawn area, with a map of where it burns.
+
+| Check (each year of 2012-2021 left out in turn) | World | Kazakhstan |
+| --- | --- | --- |
+| Yearly totals, whole world / whole country | 0.9% median (untreated 63.9%) | 3.0% (untreated 50.8%) |
+| One 3-degree tile, one year | 9.0% median, 31.6% at the 90th percentile | 7.6%, 20.6% |
+| Backcast of 2012 / 2013 from 2014-2021 | +4.2% / +0.9% | +3.2% / -6.3% |
+| 2011 -> 2012: untreated / MODIS alone / harmonized | 2.58x / 1.04x / 1.01x | 4.53x / 2.31x / 2.28x |
+
+By region (9 continental boxes) the median error of yearly totals is 1.0% to 3.8%, with a bias of at most 1.9%
+(table: Methods page, or `loyo_by_region.csv`). A factor per tile and calendar month lowered the tile error by
+exactly 0.5 points; the rule fixed before the first world run required more than 0.5, so the simpler tile model
+is used.
+
+**What it shows.** Joined as they are, the records say the world burns 2.3 times more in 2021-2025 than in
+2003-2007. On one scale it burns about 14% less. VIIRS alone, which needs no harmonizing, also shows slightly less
+fire in 2021-2025 than in 2012-2014. The direction agrees with the published decline in global burned area
+(Andela et al. 2017, Science 356: 1356). Run independently at 0.5 degrees with global factors and Natural Earth
+borders, Kazakhstan comes out 5.4 times lower in 2021-2025 than in 2001-2005, the same as the detailed
+national pipeline.
+
+**Limits.** A tenth of tiles err by more than 30% in a single year: they have little fire. Regional satellite
+outages are not detected, only worldwide ones. Months, not days. The record ends with 2025 (standard data only).
 
 ## Data
 

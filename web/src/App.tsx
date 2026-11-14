@@ -196,7 +196,9 @@ export function App() {
       <header>
         <div>
           <h1>Dala Fire</h1>
-          <p className="tagline">One satellite fire record for Kazakhstan, 2000 to today: NASA MODIS and VIIRS harmonized onto one scale.</p>
+          <p className="tagline">{worldOn
+            ? 'One satellite fire record, 2000 to today: Kazakhstan by day, the whole world by month. NASA MODIS and VIIRS on one scale.'
+            : 'One satellite fire record for Kazakhstan, 2000 to today: NASA MODIS and VIIRS harmonized onto one scale.'}</p>
         </div>
         <nav>
           <button className={tab === 'explore' ? 'on' : ''} onClick={() => setTab('explore')}>Kazakhstan</button>

@@ -25,6 +25,8 @@ interface Props {
   regions: GeoJSON.FeatureCollection; area: Area; hotspots: Hotspot[]; staticMask: [number, number][] | null
   drawMode: DrawMode; onDrawDone: (a: Area) => void; onRegionClick: (id: number, add: boolean) => void
   bounds?: [number, number, number, number]; attribution?: string
+  cells?: { lon: number; lat: number; color: string }[]   // optional fire grid drawn under the borders
+  cellDeg?: number
 }
 
 const ringFeature = (ring: Ring): GeoJSON.Feature => ({
@@ -39,7 +41,7 @@ async function pickStyle(): Promise<string | StyleSpecification> {
   } catch { return FALLBACK }
 }
 
-export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawDone, onRegionClick, bounds = KZ_BOUNDS,
+export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawDone, onRegionClick, bounds = KZ_BOUNDS, cells, cellDeg = 0.5,
                           attribution = 'Fire data: NASA FIRMS · Regions: © OpenStreetMap contributors' }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -66,8 +68,10 @@ export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawD
         m.addSource('draft', { type: 'geojson', data: EMPTY })
         m.addSource('mask', { type: 'geojson', data: EMPTY })
         m.addSource('hotspots', { type: 'geojson', data: EMPTY })
+        m.addSource('cells', { type: 'geojson', data: EMPTY })
         m.addLayer({ id: 'regions-fill', type: 'fill', source: 'regions',
           paint: { 'fill-color': '#c4561a', 'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.18, 0.02] } })
+        m.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.9 } })
         m.addLayer({ id: 'regions-line', type: 'line', source: 'regions', paint: { 'line-color': '#55606e', 'line-width': 0.8 } })
         m.addLayer({ id: 'area-fill', type: 'fill', source: 'area', paint: { 'fill-color': '#c4561a', 'fill-opacity': 0.12 } })
         m.addLayer({ id: 'area-line', type: 'line', source: 'area', paint: { 'line-color': '#c4561a', 'line-width': 2 } })
@@ -150,6 +154,17 @@ export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawD
                                      geometry: { type: 'Point', coordinates: [h.lon, h.lat] } })),
     })
   }, [ready, area, hotspots, staticMask, regions])
+
+  useEffect(() => {
+    const m = map.current
+    if (!m || !ready) return
+    const r = cellDeg / 2
+    ;(m.getSource('cells') as GeoJSONSource).setData(cells ? {
+      type: 'FeatureCollection',
+      features: cells.map(c => ({ type: 'Feature', properties: { c: c.color }, geometry: { type: 'Polygon',
+        coordinates: [[[c.lon - r, c.lat - r], [c.lon + r, c.lat - r], [c.lon + r, c.lat + r], [c.lon - r, c.lat + r], [c.lon - r, c.lat - r]]] } })),
+    } : EMPTY)
+  }, [ready, cells, cellDeg])
 
   useEffect(() => { if (drawMode === 'none') draft.current = [] }, [drawMode])
 

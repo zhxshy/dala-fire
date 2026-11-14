@@ -1,6 +1,6 @@
 // Fails when a headline number in README.md no longer matches web/public/data/model.json.
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
 const model = JSON.parse(readFileSync(new URL('../public/data/model.json', import.meta.url), 'utf8'))
@@ -32,6 +32,19 @@ if (v.decline_single_sensor) {
 if (v.check_by_region) {
   const ok = v.check_by_region.map(r => r.median_abs_pct).filter(x => x !== null && x <= 25)
   expected['region check'] = `${ok.length} regions: ${Math.min(...ok).toFixed(1)}% to ${Math.max(...ok).toFixed(1)}% median`
+}
+
+// world layer, when it is published
+const worldFile = new URL('../public/data/world/model.json', import.meta.url)
+if (existsSync(worldFile)) {
+  const w = JSON.parse(readFileSync(worldFile, 'utf8')).validation
+  const t = w.loyo.tile, n = w.loyo.naive
+  expected['world total'] = `${t.global_median_abs_pct.toFixed(1)}% median (untreated ${n.global_median_abs_pct.toFixed(1)}%)`
+  expected['world tile'] = `${t.tile_median_abs_pct.toFixed(1)}% median, ${t.tile_p90_abs_pct.toFixed(1)}% at the 90th percentile`
+  if (w.seam_2011_to_2012_ratio) {
+    const z = w.seam_2011_to_2012_ratio
+    expected['world seam'] = `${z.naive_splice.toFixed(2)}x / ${z.modis_only.toFixed(2)}x / ${z.harmonized.toFixed(2)}x`
+  }
 }
 
 const missing = Object.entries(expected).filter(([, text]) => !readme.includes(text))
