@@ -119,7 +119,8 @@ model = {"data_through": str(ds["date"].max().date()), "generated": pd.Timestamp
          "factors": {"modis_to_vnp_national": strata["modis_to_vnp"]["k_national"],
                      "terra_bridge": strata["terra_bridge"]["b_national"], "aqua_bridge": strata["aqua_bridge"]["b_national"],
                      "vj1_to_vnp": strata["vj1_to_vnp"]["r"], "vj2_to_vnp": strata["vj2_to_vnp"]["r"],
-                     "calibration_window": strata["modis_to_vnp"]["window"], "tile_deg": strata["tile_deg"]},
+                     "calibration_window": strata["modis_to_vnp"]["window"], "calibration_days": strata["modis_to_vnp"]["days"],
+                     "tile_deg": strata["tile_deg"]},
          "validation": val}
 (OUT / "model.json").write_text(json.dumps(model, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
 

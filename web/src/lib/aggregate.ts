@@ -1,0 +1,173 @@
+// Turn the cell-day table into daily, monthly and yearly series for one area.
+// The model is additive, so an area's harmonized value is just the sum over its cells.
+// AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
+import type { CellDays, Days, SizeBand } from './data'
+
+export const REF_FIRST = 2001
+export const MODEL_SOURCES = new Set(['MODIS', 'TERRA', 'AQUA'])
+export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+export interface Calendar {
+  epoch: number                 // ms, UTC
+  nDays: number
+  year: Int16Array; month: Int8Array; dom: Int8Array   // per day (month 0-11)
+  source: string[]              // per day
+  hasData: Uint8Array; modelled: Uint8Array
+  lastYear: number; lastMonth: number; lastDom: number
+}
+
+export function buildCalendar(days: Days): Calendar {
+  const epoch = Date.parse(days.epoch + 'T00:00:00Z')
+  const n = days.source.length
+  const year = new Int16Array(n), month = new Int8Array(n), dom = new Int8Array(n)
+  const hasData = new Uint8Array(n), modelled = new Uint8Array(n)
+  const source = days.source.map(i => days.codes[i])
+  for (let k = 0; k < n; k++) {
+    const dt = new Date(epoch + k * 86400000)
+    year[k] = dt.getUTCFullYear(); month[k] = dt.getUTCMonth(); dom[k] = dt.getUTCDate()
+    hasData[k] = source[k] === 'NONE' ? 0 : 1
+    modelled[k] = MODEL_SOURCES.has(source[k]) ? 1 : 0
+  }
+  return { epoch, nDays: n, year, month, dom, source, hasData, modelled,
+           lastYear: year[n - 1], lastMonth: month[n - 1], lastDom: dom[n - 1] }
+}
+
+export interface Daily { harm: Float64Array; modis: Float64Array; vnp: Float64Array }
+
+/** Sum the area's cells per day. modis = Terra or Aqua saw fire; vnp = S-NPP saw fire. */
+export function dailySeries(cells: CellDays, mask: Uint8Array, nDays: number): Daily {
+  const harm = new Float64Array(nDays), modis = new Float64Array(nDays), vnp = new Float64Array(nDays)
+  const { d, h, m } = cells
+  for (let i = 0; i < cells.n; i++) {
+    if (!mask[i]) continue
+    const k = d[i]
+    harm[k] += h[i]
+    if (m[i] & 3) modis[k] += 1
+    if (m[i] & 4) vnp[k] += 1
+  }
+  return { harm, modis, vnp }
+}
+
+export interface Period {
+  key: string; year: number; month: number | null   // month 0-11, null for a year
+  harm: number; modis: number; vnp: number; naive: number
+  days: number; daysWithData: number; modelledShare: number
+  partial: boolean            // period not finished at the data-through date
+  band: [number, number] | null
+  indicative: boolean         // too small for the model to be reliable
+}
+
+export function bandFor(p: number, bands: SizeBand[]): { band: [number, number]; indicative: boolean } {
+  const edges = [3, 10, 30, 100, 300, 1000, 3000, Infinity]
+  let i = edges.findIndex((e, j) => p >= e && p < edges[j + 1])
+  if (i < 0) i = 0
+  const b = bands[Math.min(i, bands.length - 1)]
+  return { band: [p * b.p10, p * b.p90], indicative: p < 30 }
+}
+
+function summarize(key: string, year: number, month: number | null, idx: number[], s: Daily, cal: Calendar,
+                   bands: SizeBand[], partial: boolean): Period {
+  let harm = 0, modis = 0, vnp = 0, withData = 0, modelled = 0, harmModelled = 0
+  for (const k of idx) {
+    harm += s.harm[k]; modis += s.modis[k]; vnp += s.vnp[k]
+    if (cal.hasData[k]) withData++
+    if (cal.modelled[k]) { modelled++; harmModelled += s.harm[k] }
+  }
+  const naive = year < 2012 ? modis : vnp
+  const modelledShare = withData ? modelled / withData : 0
+  let band: [number, number] | null = null, indicative = false
+  if (modelledShare > 0 && harmModelled > 0) {
+    const b = bandFor(harmModelled, bands)
+    band = [harm - harmModelled + b.band[0], harm - harmModelled + b.band[1]]
+    indicative = modelledShare > 0.5 && b.indicative
+  }
+  return { key, year, month, harm, modis, vnp, naive, days: idx.length, daysWithData: withData,
+           modelledShare, partial, band, indicative }
+}
+
+export function monthlyPeriods(s: Daily, cal: Calendar, bands: SizeBand[]): Period[] {
+  const groups = new Map<string, number[]>()
+  for (let k = 0; k < cal.nDays; k++) {
+    const key = `${cal.year[k]}-${String(cal.month[k] + 1).padStart(2, '0')}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(k)
+  }
+  const last = `${cal.lastYear}-${String(cal.lastMonth + 1).padStart(2, '0')}`
+  const lastDayOfMonth = new Date(Date.UTC(cal.lastYear, cal.lastMonth + 1, 0)).getUTCDate()
+  return [...groups].map(([key, idx]) => summarize(key, cal.year[idx[0]], cal.month[idx[0]], idx, s, cal, bands,
+    key === last && cal.lastDom < lastDayOfMonth))
+}
+
+export function yearlyPeriods(s: Daily, cal: Calendar, bands: SizeBand[]): Period[] {
+  const groups = new Map<number, number[]>()
+  for (let k = 0; k < cal.nDays; k++) {
+    const y = cal.year[k]
+    if (!groups.has(y)) groups.set(y, [])
+    groups.get(y)!.push(k)
+  }
+  const first = cal.year[0]
+  return [...groups].map(([y, idx]) => summarize(String(y), y, null, idx, s, cal, bands,
+    y === cal.lastYear || y === first))
+}
+
+export function quantile(sorted: number[], q: number): number {
+  if (!sorted.length) return NaN
+  const pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos)
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo)
+}
+
+export interface Climatology { median: number[]; p10: number[]; p90: number[] }
+
+/** Per calendar month: median and p10/p90 of complete, well-covered months REF_FIRST..lastYear-1. */
+export function climatology(months: Period[], lastYear: number): Climatology {
+  const by: number[][] = Array.from({ length: 12 }, () => [])
+  for (const p of months) {
+    if (p.month === null || p.partial || p.year < REF_FIRST || p.year >= lastYear) continue
+    if (p.daysWithData / p.days < 0.8) continue
+    by[p.month].push(p.harm)
+  }
+  const sorted = by.map(v => [...v].sort((a, b) => a - b))
+  return { median: sorted.map(v => quantile(v, 0.5)), p10: sorted.map(v => quantile(v, 0.1)),
+           p90: sorted.map(v => quantile(v, 0.9)) }
+}
+
+/** Robust anomaly: distance from the median in units of the p10-p90 spread. */
+export function anomaly(p: Period, c: Climatology): number {
+  if (p.month === null) return NaN
+  const spread = Math.max(c.p90[p.month] - c.p10[p.month], 1)
+  return (p.harm - c.median[p.month]) / spread
+}
+
+export interface Comparison {
+  label: string; value: number; median: number; p10: number; p90: number
+  percentile: number; nRef: number; refYears: [number, number]
+}
+
+/** Value of days dayFrom..dayTo of (year, month) vs the same days in earlier years. */
+function compareDays(s: Daily, cal: Calendar, year: number, month: number, dayFrom: number, dayTo: number, label: string): Comparison {
+  const sums = new Map<number, number>(), cover = new Map<number, number>()
+  for (let k = 0; k < cal.nDays; k++) {
+    if (cal.month[k] !== month || cal.dom[k] < dayFrom || cal.dom[k] > dayTo) continue
+    const y = cal.year[k]
+    sums.set(y, (sums.get(y) ?? 0) + s.harm[k])
+    cover.set(y, (cover.get(y) ?? 0) + cal.hasData[k])
+  }
+  const span = dayTo - dayFrom + 1
+  const ref: number[] = []
+  for (const [y, v] of sums) if (y >= REF_FIRST && y < year && (cover.get(y) ?? 0) / span >= 0.8) ref.push(v)
+  ref.sort((a, b) => a - b)
+  const value = sums.get(year) ?? 0
+  const below = ref.filter(v => v < value).length, equal = ref.filter(v => v === value).length
+  return { label, value, median: quantile(ref, 0.5), p10: quantile(ref, 0.1), p90: quantile(ref, 0.9),
+           percentile: ref.length ? (100 * (below + equal / 2)) / ref.length : NaN, nRef: ref.length,
+           refYears: [REF_FIRST, year - 1] }
+}
+
+export function currentComparisons(s: Daily, cal: Calendar): Comparison[] {
+  const { lastYear: y, lastMonth: m, lastDom: d } = cal
+  const out = [compareDays(s, cal, y, m, 1, d, `${MONTHS[m]} 1–${d}, ${y}`)]
+  const py = m === 0 ? y - 1 : y, pm = m === 0 ? 11 : m - 1
+  const pdays = new Date(Date.UTC(py, pm + 1, 0)).getUTCDate()
+  out.push(compareDays(s, cal, py, pm, 1, pdays, `${MONTHS[pm]} ${py} (full month)`))
+  return out
+}

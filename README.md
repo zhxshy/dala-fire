@@ -4,7 +4,7 @@ One consistent fire record for Kazakhstan from two satellite sensors: MODIS (200
 VIIRS (2012 onward). Built for the NASA Space Apps Challenge 2026, challenge
 *Harmonization of MODIS and VIIRS Hot Spots*, by team Thermal Fusion.
 
-Status: pipeline done (steps 1-6). The web app is in progress.
+Status: pipeline (steps 1-6) and a first version of the web app are done.
 
 ## Data
 
@@ -50,6 +50,20 @@ Numbers to expect with the download above:
 | Gap days found: Terra / Aqua / S-NPP / NOAA-20 / NOAA-21 | 53 / 33 / 53 / 5 / 0 |
 | MODIS -> S-NPP national factor | 2.005 (3,619 calibration days) |
 | Harmonized total, all years | 2,118,602 cell-days |
+
+## Web app
+
+`web/` is a static React + MapLibre site. It loads `web/public/data/` and computes every chart in the
+browser, so it needs no server and no API key.
+
+```
+cd web
+npm install
+npm run dev            # http://localhost:5173/dala-fire/
+```
+
+Every push to `main` builds the site and publishes it on GitHub Pages
+(`.github/workflows/deploy.yml`). One-time setup: Settings -> Pages -> Source: GitHub Actions.
 
 ## Method so far
 
