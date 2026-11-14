@@ -32,7 +32,11 @@ export interface World { model: WorldModel; cells: WorldCells; countries: GeoJSO
 
 /** The world layer is optional: the tab appears only when its files are published. */
 export async function worldAvailable(): Promise<boolean> {
-  try { return (await fetch(`${DATA_URL}world/model.json`, { method: 'HEAD' })).ok } catch { return false }
+  // read the file itself: a dev or preview server answers 200 with the app page for files that do not exist
+  try {
+    const res = await fetch(`${DATA_URL}world/model.json`)
+    return res.ok && Array.isArray((await res.json()).months)
+  } catch { return false }
 }
 
 export async function loadWorld(): Promise<World> {
