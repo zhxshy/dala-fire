@@ -1,7 +1,7 @@
 // Map: regions to click, box/polygon drawing, the selected area, hotspots of the selected month.
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 import * as maplibregl from 'maplibre-gl'
-import type { GeoJSONSource, MapMouseEvent, StyleSpecification } from 'maplibre-gl'
+import type { GeoJSONSource, ImageSource, MapMouseEvent, StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { useEffect, useRef, useState } from 'react'
@@ -25,9 +25,14 @@ interface Props {
   regions: GeoJSON.FeatureCollection; area: Area; hotspots: Hotspot[]; staticMask: [number, number][] | null
   drawMode: DrawMode; onDrawDone: (a: Area) => void; onRegionClick: (id: number, add: boolean) => void
   bounds?: [number, number, number, number]; attribution?: string
-  cells?: { lon: number; lat: number; color: string }[]   // optional fire grid drawn under the borders
-  cellDeg?: number
+  image?: string   // optional world raster (data URL, Web Mercator rows, see MERC_CORNERS) drawn under the labels
 }
+
+// corners of a full-world Web Mercator image; its rows must be evenly spaced in Mercator y, not in latitude
+export const MERC_LAT = 85.0511
+const MERC_CORNERS: [[number, number], [number, number], [number, number], [number, number]] =
+  [[-180, MERC_LAT], [180, MERC_LAT], [180, -MERC_LAT], [-180, -MERC_LAT]]
+const BLANK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
 
 const ringFeature = (ring: Ring): GeoJSON.Feature => ({
   type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]]] },
@@ -41,7 +46,7 @@ async function pickStyle(): Promise<string | StyleSpecification> {
   } catch { return FALLBACK }
 }
 
-export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawDone, onRegionClick, bounds = KZ_BOUNDS, cells, cellDeg = 0.5,
+export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawDone, onRegionClick, bounds = KZ_BOUNDS, image,
                           attribution = 'Fire data: NASA FIRMS · Regions: © OpenStreetMap contributors' }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -68,10 +73,8 @@ export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawD
         m.addSource('draft', { type: 'geojson', data: EMPTY })
         m.addSource('mask', { type: 'geojson', data: EMPTY })
         m.addSource('hotspots', { type: 'geojson', data: EMPTY })
-        m.addSource('cells', { type: 'geojson', data: EMPTY })
         m.addLayer({ id: 'regions-fill', type: 'fill', source: 'regions',
           paint: { 'fill-color': '#c4561a', 'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.18, 0.02] } })
-        m.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.9 } })
         m.addLayer({ id: 'regions-line', type: 'line', source: 'regions', paint: { 'line-color': '#55606e', 'line-width': 0.8 } })
         m.addLayer({ id: 'area-fill', type: 'fill', source: 'area', paint: { 'fill-color': '#c4561a', 'fill-opacity': 0.12 } })
         m.addLayer({ id: 'area-line', type: 'line', source: 'area', paint: { 'line-color': '#c4561a', 'line-width': 2 } })
@@ -83,6 +86,11 @@ export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawD
         m.addLayer({ id: 'hotspots', type: 'circle', source: 'hotspots',
           paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.8, 8, 3.5], 'circle-stroke-width': 0.4, 'circle-stroke-color': '#fff',
                    'circle-color': ['match', ['get', 'family'], 'MODIS', SENSOR_COLORS.MODIS, SENSOR_COLORS.VIIRS] } })
+        // the fire raster goes under the basemap's labels, so place and country names stay readable
+        const firstLabel = m.getStyle().layers.find(l => l.type === 'symbol')?.id ?? 'regions-fill'   // no labels: under the borders
+        m.addSource('cells', { type: 'image', url: BLANK, coordinates: MERC_CORNERS })
+        m.addLayer({ id: 'cells', type: 'raster', source: 'cells', layout: { visibility: 'none' },
+                     paint: { 'raster-opacity': 0.85, 'raster-resampling': 'nearest', 'raster-fade-duration': 0 } }, firstLabel)
         setReady(true)
       })
       m.on('click', (e: MapMouseEvent) => {
@@ -158,13 +166,10 @@ export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawD
   useEffect(() => {
     const m = map.current
     if (!m || !ready) return
-    const r = cellDeg / 2
-    ;(m.getSource('cells') as GeoJSONSource).setData(cells ? {
-      type: 'FeatureCollection',
-      features: cells.map(c => ({ type: 'Feature', properties: { c: c.color }, geometry: { type: 'Polygon',
-        coordinates: [[[c.lon - r, c.lat - r], [c.lon + r, c.lat - r], [c.lon + r, c.lat + r], [c.lon - r, c.lat + r], [c.lon - r, c.lat - r]]] } })),
-    } : EMPTY)
-  }, [ready, cells, cellDeg])
+    const src = m.getSource('cells') as ImageSource | undefined
+    if (src && image) src.updateImage({ url: image, coordinates: MERC_CORNERS })
+    m.setLayoutProperty('cells', 'visibility', image ? 'visible' : 'none')
+  }, [ready, image])
 
   useEffect(() => { if (drawMode === 'none') draft.current = [] }, [drawMode])
 

@@ -7,7 +7,7 @@ import { areaLabel, areaMask, type Area } from '../lib/geo'
 import { loadWorld, worldPeriods, type World as WorldData } from '../lib/world'
 import { AnnualChart, AnnualLegend } from './AnnualChart'
 import { Calendar, CalendarLegend, calendarMax, MODE_LABEL, type Mode } from './Calendar'
-import { MapView, type DrawMode } from './MapView'
+import { MapView, MERC_LAT, type DrawMode } from './MapView'
 import { fire, FIRE_STOPS } from '../lib/colors'
 
 const WORLD_BOUNDS: [number, number, number, number] = [-170, -55, 180, 75]
@@ -46,31 +46,45 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
   }, [data, area])
 
   // the map shows where it burns: harmonized fire cell-days per 0.5-degree cell, either one month or the
-  // yearly mean of the last five full years
+  // yearly mean of the last five full years, drawn as one Web Mercator image (fast, and it sits under the labels)
+  const lastYear = view?.last
   const fireMap = useMemo(() => {
-    if (!data || !view) return null
+    if (!data || lastYear === undefined) return null
     const { cells, model } = data
+    const res = model.grid.res_deg, nx = Math.round(360 / res), ny = Math.round(180 / res)
     const k = month ? model.months.findIndex(mm => mm.key === month) : -1
-    const first = model.months.findIndex(mm => mm.key === `${view.last - 4}-01`)
-    const sum = new Map<number, number>()
+    const first = model.months.findIndex(mm => mm.key === `${lastYear - 4}-01`)
+    const grid = new Float32Array(nx * ny)
     for (let i = 0; i < cells.n; i++) {
       const ok = k >= 0 ? cells.ym[i] === k : cells.ym[i] >= first
       if (!ok || cells.h[i] <= 0) continue
-      const key = cells.lat[i] * 10000 + cells.lon[i]
-      sum.set(key, (sum.get(key) ?? 0) + cells.h[i] / (k >= 0 ? 1 : 5))
+      const gi = Math.floor((cells.lat[i] + 90) / res), gj = Math.floor((((cells.lon[i] + 180) % 360) + 360) % 360 / res)
+      if (gi >= 0 && gi < ny && gj >= 0 && gj < nx) grid[gi * nx + gj] += cells.h[i] / (k >= 0 ? 1 : 5)
     }
-    const vals = [...sum.values()].sort((a, b) => a - b)
+    const vals = Array.from(grid.filter(v => v > 0)).sort((a, b) => a - b)
     const top = vals.length ? vals[Math.floor(0.99 * (vals.length - 1))] : 1
-    const out: { lon: number; lat: number; color: string }[] = []
-    for (const [key, v] of sum) {
-      const lat = Math.round(key / 10000 * 4) / 4, lon = key - lat * 10000
-      out.push({ lat, lon, color: fire(Math.min(v, top), top) })
+    // colour lookup table, 256 steps on the same log scale as the legend
+    const lut = Array.from({ length: 256 }, (_, t) => fire(Math.expm1((t / 255) * Math.log1p(top)), top).match(/\d+/g)!.map(Number))
+    const H = 2048, ymax = Math.log(Math.tan(Math.PI / 4 + (MERC_LAT * Math.PI) / 360))
+    const canvas = document.createElement('canvas'); canvas.width = nx; canvas.height = H
+    const ctx = canvas.getContext('2d')!, img = ctx.createImageData(nx, H)
+    for (let row = 0; row < H; row++) {
+      const y = ymax - ((row + 0.5) / H) * 2 * ymax
+      const lat = (Math.atan(Math.sinh(y)) * 180) / Math.PI
+      const gi = Math.floor((lat + 90) / res)
+      for (let col = 0; col < nx; col++) {
+        const v = grid[gi * nx + col]
+        if (v <= 0) continue
+        const c = lut[Math.min(255, Math.round((Math.log1p(Math.min(v, top)) / Math.log1p(top)) * 255))], o = (row * nx + col) * 4
+        img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255
+      }
     }
-    return { cells: out, top, label: month ?? `${view.last - 4}–${view.last}, yearly mean`, per: month ? 'month' : 'year' }
-  }, [data, view, month])
+    ctx.putImageData(img, 0, 0)
+    return { image: canvas.toDataURL('image/png'), top, label: month ?? `${lastYear - 4}–${lastYear}, yearly mean`, per: month ? 'month' : 'year' }
+  }, [data, lastYear, month])
 
   if (error) return <p className="warn">Could not load the world layer: {error}</p>
-  if (!data || !view) return <p>Loading the world layer…</p>
+  if (!data || !view) return <p className="status">Loading the world layer: 25 years of fire for every country (about 25 MB, a few seconds on a fast connection)…</p>
 
   const { model } = data
   const val = model.validation
@@ -134,7 +148,7 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
 
       <section className="panel mapbox">
         <MapView regions={data.countries} area={area} hotspots={[]} staticMask={null} drawMode={drawMode} bounds={WORLD_BOUNDS}
-                 cells={fireMap?.cells} cellDeg={model.grid.res_deg}
+                 image={fireMap?.image}
                  attribution="Fire data: NASA FIRMS · Countries: Natural Earth"
                  onDrawDone={a => { onArea(a); setDrawMode('none') }} onRegionClick={pick} />
         <div className="legend">
