@@ -294,3 +294,49 @@ export function outlook(s: Daily, cal: Calendar, refFirst = REF_FIRST, days = 28
   return { from: fmt(t0 + 86400000), to: fmt(t0 + days * 86400000), median: quantile(sums, 0.5),
            p10: quantile(sums, 0.1), p90: quantile(sums, 0.9), nRef: sums.length, shareOfYear: quantile(shares, 0.5) }
 }
+
+// --- every year week by week (a weekly burning calendar) ---
+export interface WeekGrid { years: number[]; values: (number | null)[][]; max: number }
+
+export function weeklyGrid(s: Daily, cal: Calendar): WeekGrid {
+  const sum = new Map<number, Float64Array>(), cover = new Map<number, Float64Array>(), len = new Map<number, Float64Array>()
+  const get = (m: Map<number, Float64Array>, y: number) => {
+    let a = m.get(y); if (!a) { a = new Float64Array(WEEKS); m.set(y, a) } return a
+  }
+  for (let k = 0; k < cal.nDays; k++) {
+    const y = cal.year[k], w = weekOfYear(y, cal.month[k], cal.dom[k])
+    get(sum, y)[w] += s.harm[k]; get(cover, y)[w] += cal.hasData[k]; get(len, y)[w] += 1
+  }
+  const years = [...sum.keys()].sort((a, b) => a - b)
+  let max = 1
+  const values = years.map(y => Array.from({ length: WEEKS }, (_, w) => {
+    const n = len.get(y)![w], c = cover.get(y)![w]
+    if (n < 4 || c / n < 0.5) return null     // week not in the record yet, or mostly without satellite data
+    const v = (sum.get(y)![w] * 7) / n
+    if (v > max) max = v
+    return v
+  }))
+  return { years, values, max }
+}
+
+// --- season shift: which part of the year burns, first five full years against the last five ---
+export interface SeasonShift { early: [number, number]; late: [number, number]; spring: [number, number]; autumn: [number, number] }
+
+export function seasonShift(months: Period[], lastYear: number): SeasonShift | null {
+  const share = (y0: number, y1: number, ms: number[]) => {
+    let part = 0, all = 0
+    for (const p of months) if (p.year >= y0 && p.year <= y1) { all += p.harm; if (ms.includes(p.month!)) part += p.harm }
+    return all > 0 ? part / all : NaN
+  }
+  const early: [number, number] = [REF_FIRST, REF_FIRST + 4], late: [number, number] = [lastYear - 5, lastYear - 1]
+  const spring: [number, number] = [share(...early, [2, 3, 4]), share(...late, [2, 3, 4])]
+  const autumn: [number, number] = [share(...early, [7, 8, 9]), share(...late, [7, 8, 9])]
+  return [...spring, ...autumn].every(Number.isFinite) ? { early, late, spring, autumn } : null
+}
+
+/** Mean yearly total over a run of years, for the harmonized and the naive record. */
+export function meanYearly(years: Period[], y0: number, y1: number): { harm: number; naive: number } {
+  const sel = years.filter(p => p.year >= y0 && p.year <= y1)
+  const n = Math.max(1, sel.length)
+  return { harm: sel.reduce((a, p) => a + p.harm, 0) / n, naive: sel.reduce((a, p) => a + p.naive, 0) / n }
+}

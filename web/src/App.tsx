@@ -2,8 +2,8 @@
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  buildCalendar, climatology, criticalPeriods, currentComparisons, dailySeries, monthlyPeriods, MONTHS, outlook, seasonalProfile,
-  topDays, weekLabel, yearlyPeriods,
+  buildCalendar, climatology, criticalPeriods, currentComparisons, dailySeries, meanYearly, monthlyPeriods, MONTHS, outlook,
+  seasonalProfile, seasonShift, topDays, weekLabel, weeklyGrid, yearlyPeriods,
 } from './lib/aggregate'
 import { download, hotspotsCsv, seriesCsv, svgToPng } from './lib/csv'
 import {
@@ -11,13 +11,18 @@ import {
   type CellDays, type Days, type Hotspot, type Model,
 } from './lib/data'
 import { areaLabel, areaMask, inArea, type Area } from './lib/geo'
+import { readHash, writeHash } from './lib/url'
+import { worldAvailable } from './lib/world'
 import { AnnualChart, AnnualLegend } from './components/AnnualChart'
 import { Calendar, CalendarLegend, calendarMax, MODE_LABEL, type Mode } from './components/Calendar'
 import { CurrentCards } from './components/CurrentCard'
+import { Intro } from './components/Intro'
 import { MapView, type DrawMode } from './components/MapView'
 import { Methods } from './components/Methods'
 import { SeasonChart, SeasonLegend } from './components/SeasonChart'
 import { TopDays } from './components/TopDays'
+import { WeekGrid } from './components/WeekGrid'
+import { World } from './components/World'
 
 interface Loaded { model: Model; days: Days; regions: GeoJSON.FeatureCollection; cells: CellDays }
 
@@ -26,12 +31,16 @@ const PRESETS: { label: string; regions: string[] }[] = [
   { label: 'Western oil and gas regions', regions: ['West Kazakhstan Region', 'Atyrau Region', 'Mangystau Region', 'Aqtöbe Region'] },
 ]
 const MAX_DOWNLOAD_YEARS = 5
+const pct = (v: number) => `${Math.round(100 * v)}%`
+const introHidden = () => { try { return localStorage.getItem('dala-intro') === 'hidden' } catch { return false } }
 const fmtN = (v: number) => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '–')
 
 export function App() {
   const [data, setData] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'explore' | 'methods'>('explore')
+  const [tab, setTab] = useState<'explore' | 'world' | 'methods'>('explore')
+  const [worldOn, setWorldOn] = useState(false)
+  const [worldArea, setWorldArea] = useState<Area>({ kind: 'country' })
   const [area, setArea] = useState<Area>({ kind: 'country' })
   const [mode, setMode] = useState<Mode>('harm')
   const [drawMode, setDrawMode] = useState<DrawMode>('none')
@@ -46,17 +55,43 @@ export function App() {
   const [seasonRecent, setSeasonRecent] = useState(false)
   const [topObserved, setTopObserved] = useState(false)
   const calRef = useRef<SVGSVGElement>(null), annRef = useRef<SVGSVGElement>(null), seasonRef = useRef<SVGSVGElement>(null)
-  const mapRef = useRef<HTMLElement>(null)
+  const mapRef = useRef<HTMLElement>(null), calPanelRef = useRef<HTMLElement>(null)
+  const [showIntro, setShowIntro] = useState(() => !introHidden())
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     (async () => {
       const [model, days, regions] = await Promise.all([loadModel(), loadDays(), loadRegions()])
       const cells = await loadCellDays(model)
+      // a shared link restores the area, the selected month or day and the view options
+      const h = readHash(model.regions, Object.keys(MODE_LABEL))
+      if (h.area) setArea(h.area)
+      if (h.selected) setSelected(h.selected)
+      if (h.mode) setMode(h.mode as Mode)
+      const hasWorld = await worldAvailable()
+      setWorldOn(hasWorld)
+      if (h.worldArea) setWorldArea(h.worldArea)
+      if (h.tab && (h.tab !== 'world' || hasWorld)) setTab(h.tab)
+      if (h.seasonRecent) setSeasonRecent(true)
+      if (h.topObserved) setTopObserved(true)
       setData({ model, days, regions, cells })
     })().catch(e => setError(String(e)))
   }, [])
 
+  useEffect(() => {
+    if (data) writeHash({ area, selected, mode, tab, seasonRecent, topObserved, worldArea }, data.model.regions)
+  }, [data, area, selected, mode, tab, seasonRecent, topObserved, worldArea])
+
   const cal = useMemo(() => (data ? buildCalendar(data.days) : null), [data])
+
+  // whole-country decline for the introduction: 2001-2005 against the last five full years
+  const decline = useMemo(() => {
+    if (!data || !cal) return null
+    const all = new Uint8Array(data.cells.lat.length).fill(1)
+    const years = yearlyPeriods(dailySeries(data.cells, all, cal.nDays), cal, data.model.validation.error_vs_size)
+    const a = meanYearly(years, 2001, 2005), b = meanYearly(years, cal.lastYear - 5, cal.lastYear - 1)
+    return b.harm > 0 && b.naive > 0 ? { harm: a.harm / b.harm, naive: a.naive / b.naive } : null
+  }, [data, cal])
   const regionName = (id: number) => data?.model.regions[id]?.en ?? `#${id}`
   const label = data ? areaLabel(area, regionName) : ''
 
@@ -72,7 +107,8 @@ export function App() {
              small: ref < 3000, max: calendarMax(months), season: seasonalProfile(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
              critical: criticalPeriods(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
              ahead: outlook(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
-             top: topDays(daily, cal, 10, topObserved ? 2012 : 0) }
+             top: topDays(daily, cal, 10, topObserved ? 2012 : 0),
+             weeks: weeklyGrid(daily, cal), shift: seasonShift(months, cal.lastYear) }
   }, [data, cal, area, seasonRecent, topObserved])
 
   // hotspots of the selected month (YYYY-MM) or day (YYYY-MM-DD), inside the area
@@ -100,6 +136,21 @@ export function App() {
       }
       return { kind: 'regions', ids: [id] }
     })
+  }
+
+  const hideIntro = () => { setShowIntro(false); try { localStorage.setItem('dala-intro', 'hidden') } catch { /* private mode */ } }
+  const scrollTo = (el: HTMLElement | null) => setTimeout(() => el?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+  const showJump = (m: Mode) => { setTab('explore'); setArea({ kind: 'country' }); setSelected(null); setMode(m); scrollTo(calPanelRef.current) }
+  const showExample = () => {
+    const kostanay = data?.model.regions.find(r => r.iso === 'KZ-39')
+    if (!kostanay) return
+    setTab('explore'); setArea({ kind: 'regions', ids: [kostanay.id] }); setMode('harm'); setTopObserved(true); setSelected('2022-09-03')
+    scrollTo(mapRef.current)
+  }
+  const copyLink = async () => {
+    if (!data) return
+    const url = writeHash({ area, selected, mode, tab, seasonRecent, topObserved, worldArea }, data.model.regions)
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { window.prompt('Copy this link', url) }
   }
 
   const toggleMask = async () => setMask(mask ? null : await loadStaticMask())
@@ -132,13 +183,19 @@ export function App() {
           <p className="tagline">One satellite fire record for Kazakhstan, 2000 to today: NASA MODIS and VIIRS harmonized onto one scale.</p>
         </div>
         <nav>
-          <button className={tab === 'explore' ? 'on' : ''} onClick={() => setTab('explore')}>Explore</button>
+          <button className={tab === 'explore' ? 'on' : ''} onClick={() => setTab('explore')}>Kazakhstan</button>
+          {worldOn && <button className={tab === 'world' ? 'on' : ''} onClick={() => setTab('world')}>World</button>}
           <button className={tab === 'methods' ? 'on' : ''} onClick={() => setTab('methods')}>Methods &amp; validation</button>
           <span className="through">Data through {data.model.data_through}</span>
         </nav>
       </header>
 
-      {tab === 'methods' ? <Methods model={data.model} /> : (
+      {tab === 'explore' && (showIntro
+        ? <Intro model={data.model} decline={decline} onShowJump={() => showJump('naive')} onShowFixed={() => showJump('harm')}
+                 onShowExample={showExample} onMethods={() => setTab('methods')} onHide={hideIntro} />
+        : <p className="small"><button onClick={() => setShowIntro(true)}>Why this record exists</button></p>)}
+
+      {tab === 'methods' ? <Methods model={data.model} /> : tab === 'world' ? <World area={worldArea} onArea={setWorldArea} /> : (
         <main>
           <section className="panel area">
             <h2>1. Choose an area</h2>
@@ -179,6 +236,7 @@ export function App() {
               </form>
             </details>
             <p className="selected">Selected: <b>{label}</b>. Shift-click regions on the map to combine them.</p>
+            <div className="row"><button onClick={copyLink}>Copy link to this view</button>{copied && <span className="copied">Link copied</span>}</div>
             {view.small && <p className="warn">Few fires in this area: monthly values, especially before 2012, are indicative only.</p>}
           </section>
 
@@ -223,9 +281,20 @@ export function App() {
                   <div className="card-ref">Usual range {fmtN(view.ahead.p10)}–{fmtN(view.ahead.p90)}; {(view.ahead.shareOfYear || 0) < 0.005 ? 'under 1%' : `about ${Math.round(100 * view.ahead.shareOfYear)}%`} of a year’s burning.</div>
                 </> : <div className="card-ref">Not enough history here to say.</div>}
               </div>
+              {view.shift && (
+                <div className="card">
+                  <div className="card-label">Season shift, {view.shift.early[0]}–{view.shift.early[1]} → {view.shift.late[0]}–{view.shift.late[1]}</div>
+                  <div className="card-value small-value">Spring {pct(view.shift.spring[0])} → {pct(view.shift.spring[1])} · Autumn {pct(view.shift.autumn[0])} → {pct(view.shift.autumn[1])}</div>
+                  <div className="card-ref">Share of the year’s burning in March–May and in August–October.</div>
+                </div>
+              )}
             </div>
             <SeasonChart ref={seasonRef} season={view.season} critical={view.critical} />
             <SeasonLegend season={view.season} />
+            <div className="subhead">Every year, week by week</div>
+            <div className="scroll"><WeekGrid grid={view.weeks} /></div>
+            <div className="legend"><span>Dark blue: little fire · yellow: most (log scale, same as the calendar)</span>
+              <span>Above the dashed line: modelled from MODIS</span><span><i className="swatch" style={{ background: '#cfcfcf' }} /> no data</span></div>
             <details className="help"><summary>What am I looking at?</summary>
               Harmonized fire cell-days per week in the selected area. The black line is the median week of
               {' '}{view.season.refYears[0]}–{view.season.refYears[1]} and the grey band the 10th–90th percentile of those years: the
@@ -234,11 +303,13 @@ export function App() {
               not a forecast. Fire in Kazakhstan fell sharply after the 2000s, so "Last 10 years" gives a fairer picture of
               what is usual today. The orange line is {view.season.year}, complete weeks only. Kazakhstan usually burns in two waves:
               spring (field and pasture burning before sowing) and late summer to autumn (after the harvest). Weeks with satellite
-              outages are left out.
+              outages are left out. "Every year, week by week" is the same record as a weekly calendar: read along a row to see
+              when that year's fire season started, peaked and ended, and down a column to see how a season changed over 26 years.
+              Single weeks before 2012 are modelled and less certain than months or years.
             </details>
           </section>
 
-          <section className="panel">
+          <section className="panel" ref={calPanelRef}>
             <h2>4. Burning calendar, {firstYear}–{lastYear}</h2>
             <div className="row modes" role="radiogroup" aria-label="What the calendar shows">
               {(Object.keys(MODE_LABEL) as Mode[]).map(k => (

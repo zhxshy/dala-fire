@@ -1,10 +1,48 @@
 # Dala Fire
 
-One consistent fire record for Kazakhstan from two satellite sensors: MODIS (2000 onward) and
-VIIRS (2012 onward). Built for the NASA Space Apps Challenge 2026, challenge
-*Harmonization of MODIS and VIIRS Hot Spots*, by team Thermal Fusion.
+**One satellite fire record for Kazakhstan, 2000 to today.** NASA MODIS and VIIRS active-fire detections,
+harmonized onto one scale and served as a burning-activity calendar for any area of the country.
 
-Status: pipeline (steps 1-6) and a first version of the web app are done.
+Built for the NASA Space Apps Challenge 2026, challenge *Harmonization of MODIS and VIIRS Hot Spots*,
+by team Thermal Fusion (Zhoshy Khalelov, Zhangir Abay).
+
+**Live app: https://zhxshy.github.io/dala-fire/**
+
+![Fire activity per year in Kazakhstan: the naive MODIS-to-VIIRS splice against the harmonized record](figures/02_before_after.png)
+
+## Summary
+
+**The problem.** VIIRS (375 m, since 2012) reports about twice as much fire as MODIS (1 km, since 2000) for the
+same burning. Joined as they are, Kazakhstan's record jumps 4.5 times from 2011 to 2012. MODIS alone saw 2.3
+times. Any trend across 2012 is wrong.
+
+**The method.** Detections become fire cell-days (a 0.01 degree cell with fire on a day). MODIS cell-days are
+multiplied by a factor per 3-degree tile, fitted on 3,619 days when Terra, Aqua and Suomi NPP all observed
+Kazakhstan and shrunk toward the national factor (2.005) where data are thin. From 2012 the record is VIIRS
+itself; NOAA-20 and NOAA-21 fill outages and carry it on after Suomi NPP stopped on 2 November 2026. Satellite
+outages are "no data", never zero.
+
+| Result | Value | Limits |
+| --- | --- | --- |
+| Error of national yearly totals, each year of 2012-2021 left out in turn | 3.0% median (naive splice 50.8%) | Tests years with VIIRS; says nothing direct about 2000-2011 |
+| Error per 3-degree tile, same test | 7.6% median, 20.6% at the 90th percentile | Small areas and single months are worse (see the size table on the Methods page) |
+| The 2012 jump | harmonized 2.28x, MODIS alone 2.31x, naive 4.53x | Continuity at the switch, not that the factors are right before it |
+| Backcast: factors from 2014-2021 predict 2012 and 2013 | +3.2% and -6.3% | Two years only |
+| Sensitivity: 12 variants, one choice changed at a time | national error 2.1-3.9%, decline 4.9-5.3x | Variants of one method family, on one country |
+| Outage detector against the FIRMS missing-data list | 127 of 178 listed days found independently | Only whole-day, country-wide gaps |
+
+**What it shows.** On one scale, fire activity in Kazakhstan fell 5.4 times from 2001-2005 to 2021-2025; the naive
+splice shows 2.3 times and hides more than half of the decline.
+
+**What we cannot claim.** There is no VIIRS before 2012, so the factors assume each tile's VIIRS-to-MODIS ratio
+stayed the same; that cannot be measured. No independent ground truth was used. The record shows when and where
+burning changed, not why. Single days and weeks before 2012 are less certain than months and years. The
+"next 4 weeks" card is a seasonal expectation, not a forecast. Fire power (FRP) is not harmonized.
+
+**Links that open an example:**
+[the jump in the naive record](https://zhxshy.github.io/dala-fire/#m=naive) ·
+[Kostanay Region, 3 September 2022](https://zhxshy.github.io/dala-fire/#a=KZ-39&d=2022-09-03&top=viirs) ·
+[methods and validation](https://zhxshy.github.io/dala-fire/#tab=methods)
 
 ## Data
 
@@ -47,7 +85,7 @@ Numbers to expect with the download above:
 | Detections loaded | 4,152,447 |
 | Detections kept after cleaning | 3,200,835 (77.1%) |
 | Fire cell-days | 2,268,202 |
-| Gap days found: Terra / Aqua / S-NPP / NOAA-20 / NOAA-21 | 53 / 33 / 53 / 5 / 0 |
+| Gap days found: Terra / Aqua / S-NPP / NOAA-20 / NOAA-21 | 63 / 33 / 53 / 6 / 2 |
 | MODIS -> S-NPP national factor | 2.005 (3,619 calibration days) |
 | Harmonized total, all years | 2,118,602 cell-days |
 
@@ -65,7 +103,7 @@ npm run dev            # http://localhost:5173/dala-fire/
 Every push to `main` builds the site and publishes it on GitHub Pages
 (`.github/workflows/deploy.yml`). One-time setup: Settings -> Pages -> Source: GitHub Actions.
 
-## Method so far
+## Method
 
 - **Cleaning.** MODIS confidence >= 30; VIIRS nominal or high; FIRMS type 0 (vegetation fire) where
   the type is known; a static-source mask (cells with repeated type 2/3 detections, plus neighbours)
@@ -139,6 +177,22 @@ day and night share one factor. No variant is better on every measure, so the ba
 the test.
 
 `explore/` holds quick looks (national series, the 2012 seam figure). They are not part of the pipeline.
+
+## Design questions
+
+Raised by participants in the challenge discussion
+([nasa/spaceapps #1879](https://github.com/nasa/spaceapps/discussions/1879); the replies there are not official):
+
+- **MODIS or VIIRS scale?** VIIRS (Suomi NPP): the scale of today's and future data, so the record continues unchanged on
+  NOAA-20/21 after MODIS ends. Cost: pre-2012 values are modelled from MODIS; they are flagged, carry a band, and cannot
+  show small fires MODIS never saw.
+- **FIRMS archive or swath?** FIRMS Archive Download (standard data; NRT only after the last standard date). Cloud cover
+  and view angle are not modelled.
+- **Continuity after Suomi NPP?** Built in: its last day in the data is 2026-11-02; NOAA-20 (x0.998) and NOAA-21 (x1.035)
+  are tied to it on shared days and fly the same afternoon orbit.
+- **Users and time step?** Stored per day; shown by month (calendar), week (fire season, critical periods) and day
+  (biggest fire days).
+- **Earth Engine?** Not used; everything comes from FIRMS files and open scripts.
 
 ## Use of AI
 

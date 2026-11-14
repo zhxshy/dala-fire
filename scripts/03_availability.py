@@ -43,6 +43,7 @@ WINDOW = 61             # days, centred rolling median
 raw = pd.read_parquet(INT / "hotspots_all.parquet", columns=["date", "sensor"])
 raw["sensor"] = raw["sensor"].astype(str)
 counts = raw.groupby(["sensor", "date"]).size()
+SENSORS = [s for s in SENSORS if s in counts.index.get_level_values("sensor")]   # a subset in 08_transfer.py
 
 daily = {}
 for s in SENSORS:

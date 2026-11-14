@@ -76,13 +76,46 @@ export function Methods({ model }: { model: Model }) {
         </tbody>
       </table>
 
+      <h3>Design questions</h3>
+      <p>Questions raised by participants in the challenge discussion (<a href="https://github.com/nasa/spaceapps/discussions/1879" target="_blank" rel="noreferrer">nasa/spaceapps #1879</a>), and how Dala Fire answers them.</p>
+      <ul>
+        <li><b>MODIS or VIIRS scale?</b> VIIRS (Suomi NPP). It is the scale of today’s and future fire data, so the record continues
+          unchanged on NOAA-20 and NOAA-21 after MODIS ends. The cost: years before 2012 are modelled from MODIS. They are hatched,
+          carry an uncertainty band, and cannot show small fires MODIS never saw.</li>
+        <li><b>FIRMS archive or swath products?</b> The FIRMS Archive Download (standard data, near-real-time only after the last
+          standard date), with the filters listed above. Cloud cover and view angle are not modelled (see Limitations).</li>
+        <li><b>Continuity after Suomi NPP?</b> Built in. Suomi NPP’s last day in our data is 2 November 2026. NOAA-20 (×0.998) and
+          NOAA-21 (×1.035) are tied to its scale on the days all flew; they share its afternoon orbit, so no overpass-time trend is
+          introduced.</li>
+        <li><b>Users and time step?</b> Values are stored per day and shown by month (calendar), by week (fire season, critical
+          periods) and by day (biggest fire days). Emergency services get “this month vs history” and the next four weeks;
+          land and agriculture managers get the burning seasons of their region; scientists get the method, validation and CSV.</li>
+        <li><b>Earth Engine?</b> Not used. Everything is built from FIRMS files by open Python scripts anyone can rerun.</li>
+      </ul>
+
+      <h3>What we cannot claim</h3>
+      <ul>
+        <li><b>Before 2012 there is no VIIRS to check against.</b> The factors assume that each tile’s VIIRS-to-MODIS ratio of
+          2012–2021 also held in 2000–2011. That cannot be measured. The backcast tests it on two years only (2012 and 2013).
+          If small fires were more common in the 2000s, the true ratio then was higher and our early values are too low.</li>
+        <li><b>No independent ground truth.</b> Every test compares what MODIS predicts with what VIIRS saw. The record has not
+          been compared with burned-area maps or ground reports.</li>
+        <li><b>The record shows when and where burning changed, not why.</b> The explanations for the decline (grazing, farming,
+          wetter years) come from published studies, not from this data.</li>
+        <li><b>Single days and weeks before 2012 are less certain than months and years.</b> The uncertainty bands were measured
+          on monthly and yearly totals. Before July 2002 only Terra flew, with a morning overpass only.</li>
+        <li><b>“Next 4 weeks” is a seasonal expectation, not a forecast.</b> It uses no weather.</li>
+        <li><b>Fire power (FRP) is not harmonized.</b> Only the amount of detected burning is.</li>
+      </ul>
+
       <h3>Limitations</h3>
       <ul>
         <li>The model cannot create fire where MODIS saw none. In 0.25° cells by month, {v.share_of_viirs_where_modis_zero_pct['0.25']}% of
           VIIRS activity falls where MODIS saw nothing ({v.share_of_viirs_where_modis_zero_pct['1']}% at 1°). Small areas before 2012
           are marked indicative.</li>
         <li>Fire cell-days count detected burning, not burned area or emissions.</li>
-        <li>Clouds, smoke and overpass timing hide some fires from both sensors.</li>
+        <li>Clouds, smoke and overpass timing hide some fires from both sensors; view-angle (off-nadir) effects are absorbed by
+          the tile factors, not modelled separately.</li>
         <li>Data gaps are inferred from the detections themselves (whole-day, country-wide outages only) and cross-checked with the FIRMS <code>missing_data</code> list: 127 of its 178 days were already flagged, 13 more were added, and 38 were kept because our archive holds complete data for them.</li>
         <li>The static-source mask also removes about 3.8% of vegetation-fire detections that fall next to flares.</li>
       </ul>

@@ -24,6 +24,7 @@ export type DrawMode = 'none' | 'box' | 'polygon'
 interface Props {
   regions: GeoJSON.FeatureCollection; area: Area; hotspots: Hotspot[]; staticMask: [number, number][] | null
   drawMode: DrawMode; onDrawDone: (a: Area) => void; onRegionClick: (id: number, add: boolean) => void
+  bounds?: [number, number, number, number]; attribution?: string
 }
 
 const ringFeature = (ring: Ring): GeoJSON.Feature => ({
@@ -38,7 +39,8 @@ async function pickStyle(): Promise<string | StyleSpecification> {
   } catch { return FALLBACK }
 }
 
-export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawDone, onRegionClick }: Props) {
+export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawDone, onRegionClick, bounds = KZ_BOUNDS,
+                          attribution = 'Fire data: NASA FIRMS · Regions: © OpenStreetMap contributors' }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const [ready, setReady] = useState(false)
@@ -50,14 +52,14 @@ export function MapView({ regions, area, hotspots, staticMask, drawMode, onDrawD
     let cancelled = false
     pickStyle().then(style => {
       if (cancelled || !box.current) return
-      const m = new maplibregl.Map({ container: box.current, style, bounds: KZ_BOUNDS, attributionControl: { compact: true },
+      const m = new maplibregl.Map({ container: box.current, style, bounds, attributionControl: { compact: true },
                                      doubleClickZoom: false })
       map.current = m
       const ro = new ResizeObserver(() => m.resize())
       ro.observe(box.current)
       m.once('remove', () => ro.disconnect())
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-      m.addControl(new maplibregl.AttributionControl({ customAttribution: 'Fire data: NASA FIRMS · Regions: © OpenStreetMap contributors' }))
+      m.addControl(new maplibregl.AttributionControl({ customAttribution: attribution }))
       m.on('load', () => {
         m.addSource('regions', { type: 'geojson', data: regions, promoteId: 'id' })
         m.addSource('area', { type: 'geojson', data: EMPTY })
