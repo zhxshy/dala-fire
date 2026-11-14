@@ -1,11 +1,28 @@
 // Methods, validation and limitations, with numbers read from model.json.
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
-import type { Model } from '../lib/data'
+import { useEffect, useState } from 'react'
+import { DATA_URL, type Model } from '../lib/data'
+
+interface BaUnit {
+  unit: string; burned_km2_per_year: number; decline_burned_area: number; decline_harmonized: number; decline_naive: number
+  seam_step_harmonized: number | null; seam_step_naive: number | null; seam_step_modis_alone: number | null
+  corr_harmonized: number | null; corr_naive: number | null
+}
+interface BaCheck { years: number[]; early: [number, number]; late: [number, number]; before: [number, number]; after: [number, number]; units: BaUnit[] }
+const x2 = (v: number | null) => (v === null ? '–' : `${v.toFixed(2)}×`)
+const r2 = (v: number | null) => (v === null ? '–' : v.toFixed(2))
 
 const pct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`
 
 export function Methods({ model }: { model: Model }) {
   const v = model.validation, f = model.factors
+  const [ba, setBa] = useState<BaCheck | null>(null)
+  useEffect(() => {
+    fetch(`${DATA_URL}burned_area_check.json`).then(r => (r.ok ? r.json() : null)).then(d => setBa(d?.units ? d : null)).catch(() => setBa(null))
+  }, [])
+  const baShown = ba ? ['Kazakhstan', 'World', ...ba.units.map(u => u.unit).filter(u => u.startsWith('World: ')),
+                        ...ba.units.map(u => u.unit).filter(u => u.startsWith('KZ: '))]
+    .map(n => ba.units.find(u => u.unit === n)!).filter(Boolean) : []
   return (
     <article className="methods">
       <h2>How Dala Fire builds one fire record from two sensors</h2>
@@ -100,6 +117,34 @@ export function Methods({ model }: { model: Model }) {
           2012 are too low there.</p>
       </>}
 
+      {ba && <>
+        <h3>Against an independent product: burned area</h3>
+        <p>MODIS burned area (MCD64, Collection 6.1) maps the burn scar from surface reflectance, not the heat of the fire.
+          It is one MODIS product throughout, so it has no 2012 seam. Three questions: does burning fall as much as the
+          harmonized record says ({ba.early[0]}–{ba.early[1]} against {ba.late[0]}–{ba.late[1]}, the last full years of burned
+          area)? Does fire per km² burned stay level across the 2012 switch ({ba.after[0]}–{ba.after[1]} against
+          {' '}{ba.before[0]}–{ba.before[1]})? Do the yearly totals rise and fall together? Nothing here was used to fit the method.</p>
+        <div className="tablewrap"><table>
+          <thead><tr><th>Area</th><th>Burned area: times less now</th><th>Harmonized</th><th>Naive splice</th>
+            <th>2012 step, harmonized</th><th>2012 step, naive</th><th>Correlation, harmonized</th><th>Correlation, naive</th></tr></thead>
+          <tbody>
+            {baShown.map(u => (
+              <tr key={u.unit} className={u.unit === 'Kazakhstan' || u.unit === 'World' ? 'chosen' : ''}>
+                <td>{u.unit.replace(/^KZ: /, 'Kazakhstan: ').replace(/^World: /, 'World: ')}</td>
+                <td>{x2(u.decline_burned_area)}</td><td>{x2(u.decline_harmonized)}</td><td>{x2(u.decline_naive)}</td>
+                <td>{x2(u.seam_step_harmonized)}</td><td>{x2(u.seam_step_naive)}</td>
+                <td>{r2(u.corr_harmonized)}</td><td>{r2(u.corr_naive)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+        <p>In 27 of 28 areas the harmonized decline is closer to the burned-area decline than the naive one; in every area the
+          harmonized 2012 step stays within 0.11 of the step MODIS alone shows, while the naive step is 1.8 to 4.7 times that. The
+          exception is Kyzylorda, where burned area grew while hot spots fell. Limits: burned area uses MODIS active fires as
+          one of its inputs, so before 2012 the check is not fully independent; after 2012 the harmonized record is VIIRS
+          alone. Burned area and hot spots measure different things, so their ratio can drift for real reasons.</p>
+      </>}
+
       <h3>Uncertainty for any area</h3>
       <p>Modelled values (before VIIRS) carry a band: the 10th–90th percentile of observed / predicted in the left-out years,
         for areas and periods of the same predicted size.</p>
@@ -137,8 +182,9 @@ export function Methods({ model }: { model: Model }) {
         <li><b>These are satellite hot spots, not registered fires.</b> A fire cell-day is a ~1 km cell where a satellite saw
           heat on a day. Official counts of fire incidents follow reporting rules, include fires too small or too short for a
           satellite, and can rise while hot spots fall.</li>
-        <li><b>No independent ground truth.</b> Every test compares what MODIS predicts with what VIIRS saw. The record has not
-          been compared with burned-area maps or ground reports.</li>
+        <li><b>No ground truth.</b> Most tests compare what MODIS predicts with what VIIRS saw. The one independent product,
+          MODIS burned area, agrees with the harmonized decline but is partly built from MODIS active fires. The record has not
+          been compared with ground reports.</li>
         <li><b>The record shows when and where burning changed, not why.</b> The explanations for the decline (grazing, farming,
           wetter years) come from published studies, not from this data.</li>
         <li><b>Single days and weeks before 2012 are less certain than months and years.</b> The uncertainty bands were measured

@@ -156,7 +156,7 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
             {FIRE_STOPS.map(c => <i key={c} style={{ background: c }} />)}<span>{Math.round(fireMap?.top ?? 0).toLocaleString('en-US')}+</span></span>
           {month && <button onClick={() => setMonth(null)}>Back to the yearly mean</button>}
         </div>
-        <div className="row small"><span>Click a country, or draw an area. Click a month in the calendar to map it.</span></div>
+        <div className="row small"><span>Click a country, or draw an area. Click a month in the calendar to map it. Each square is {model.grid.res_deg}° (about {Math.round(model.grid.res_deg * 111)} km); a square on a border is counted in the country that holds its centre.</span></div>
       </section>
 
       <section className="panel">

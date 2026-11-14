@@ -6,7 +6,8 @@ Needs : pip install pyhdf paramiko   (plus the usual pandas, numpy, pyarrow, sha
 Input : MCD64CMQ monthly burned area, 0.25 degree, 2001-2025 (fuoco.geog.umd.edu, user "fire", password "burnt",
         the public account given in the MCD64 User Guide); web/public/data/celldays.parquet, regions.geojson and
         web/public/data/world/monthly.parquet, model.json (the published records)
-Output: results/burned_area_check.json, results/burned_area_annual.csv, figures/03_burned_area.png
+Output: results/burned_area_check.json (and a copy in web/public/data/), results/burned_area_annual.csv,
+        figures/03_burned_area.png
 
 Burned area is mapped from changes in surface reflectance (the burn scar), not from the heat of the fire, so it is
 a different measurement of the same burning. It does use MODIS active fires as a hint, and it is a MODIS product
@@ -219,7 +220,17 @@ res = pd.DataFrame(result).sort_values("burned_km2_per_year", ascending=False)
 summary = {"source": "MCD64CMQ Collection 6.1 (MODIS burned area, 0.25 degree, monthly), University of Maryland",
            "years": sorted(full_years), "early": EARLY, "late": LATE, "before": BEFORE, "after": AFTER,
            "units": res.to_dict("records")}
+def finite(x):
+    if isinstance(x, dict):
+        return {k: finite(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [finite(v) for v in x]
+    return None if isinstance(x, float) and not np.isfinite(x) else x
+
+
+summary = finite(summary)                                     # JSON has no Infinity or NaN; the browser reads this file
 (OUT / "burned_area_check.json").write_text(json.dumps(summary, indent=1))
+(WEB / "burned_area_check.json").write_text(json.dumps(summary, separators=(",", ":")))   # for the Methods page
 
 # --- figure: Kazakhstan, each record scaled to its own 2013-2021 mean ------------------------------------------
 k = t[t["unit"] == "Kazakhstan"].set_index("year")

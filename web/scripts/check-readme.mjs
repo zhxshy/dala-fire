@@ -47,6 +47,16 @@ if (existsSync(worldFile)) {
   }
 }
 
+// burned-area check, when it is published
+const baFile = new URL('../public/data/burned_area_check.json', import.meta.url)
+if (existsSync(baFile)) {
+  const units = JSON.parse(readFileSync(baFile, 'utf8')).units
+  for (const name of ['Kazakhstan', 'World']) {
+    const u = units.find(x => x.unit === name)
+    if (u) expected[`burned area, ${name}`] = `| ${name} | ${u.decline_burned_area.toFixed(2)} | ${u.decline_harmonized.toFixed(2)} | ${u.decline_naive.toFixed(2)} | ${u.seam_step_harmonized.toFixed(2)}, ${u.seam_step_naive.toFixed(2)}, ${u.seam_step_modis_alone.toFixed(2)} | ${u.corr_harmonized.toFixed(2)}, ${u.corr_naive.toFixed(2)} |`
+  }
+}
+
 const missing = Object.entries(expected).filter(([, text]) => !readme.includes(text))
 for (const [name, text] of missing) console.error(`README.md does not contain "${text}" (${name}, from model.json)`)
 if (missing.length) process.exit(1)

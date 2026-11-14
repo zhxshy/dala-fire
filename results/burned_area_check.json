@@ -400,9 +400,9 @@
    "decline_harmonized": 1.48,
    "decline_naive": 0.61,
    "decline_modis_alone": 4.51,
-   "seam_step_harmonized": Infinity,
-   "seam_step_naive": Infinity,
-   "seam_step_modis_alone": Infinity,
+   "seam_step_harmonized": null,
+   "seam_step_naive": null,
+   "seam_step_modis_alone": null,
    "corr_harmonized": 0.81,
    "corr_naive": 0.65
   }

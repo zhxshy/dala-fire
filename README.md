@@ -32,6 +32,7 @@ outages are "no data", never zero.
 | Region by region: MODIS x factors against VIIRS, yearly totals 2012-2021 | 16 regions: 2.2% to 7.6% median, all years together within 3% | Fit check, not a blind test. Fails in Mangystau (71%) and Shymkent (65%): rare fire, steady industrial heat that MODIS misses |
 | The decline in one sensor alone, nothing rescaled | MODIS 5.0x (2001-2005 to 2021-2025), VIIRS 2.1x (2012-2014 to 2021-2025) | MODIS reads up to 9.5% low after 2021 (orbit drift) |
 | Backcast: factors from 2014-2021 predict 2012 and 2013 | +3.2% and -6.3% | Two years only |
+| Independent product: MODIS burned area (MCD64), 2001-2005 to 2019-2023 | burned area 3.22x less, harmonized 3.17x, naive 1.37x; 2012 step 1.03 against 2.10 naive | Burned area partly uses MODIS active fires; ends in early 2024; Kyzylorda disagrees |
 | Sensitivity: 12 variants, one choice changed at a time | national error 2.1-3.9%, decline 4.9-5.3x | Variants of one method family, on one country |
 | Outage detector against the FIRMS missing-data list | 127 of 178 listed days found independently | Only whole-day, country-wide gaps |
 
@@ -39,7 +40,8 @@ outages are "no data", never zero.
 splice shows 2.3 times and hides more than half of the decline.
 
 **What we cannot claim.** There is no VIIRS before 2012, so the factors assume each tile's VIIRS-to-MODIS ratio
-stayed the same; that cannot be measured. No independent ground truth was used. Where fire is rare and comes
+stayed the same; that cannot be measured. There is no ground truth; the one independent product, MODIS burned area, agrees with the harmonized decline
+(3.22x against 3.17x) but is partly built from MODIS active fires. Where fire is rare and comes
 from small steady heat sources (Mangystau oil fields, cities), MODIS sees about a third of what VIIRS sees and
 values before 2012 are too low; the app says so for any selected area. These are satellite hot spots,
 not registered fire incidents: official incident counts follow reporting rules and can move differently. The record shows when and where
@@ -200,6 +202,30 @@ Limits: the model cannot create fire where MODIS saw none. In 0.25-degree cells 
 VIIRS activity falls where MODIS saw nothing (2.1% at 1 degree), so small areas are marked indicative.
 `error_by_count.csv` gives the observed/predicted spread by the size of the prediction; the app uses it
 as the uncertainty band.
+
+## Against an independent product: burned area (`scripts/10_burned_area.py`)
+
+MODIS burned area (MCD64CMQ, Collection 6.1, 0.25 degree, monthly; University of Maryland) maps the burn scar from
+surface reflectance, not the heat of the fire, and it is one MODIS product from 2001 to its last full year, 2023,
+so it has no 2012 seam. Nothing here was used to fit or tune the method.
+
+![Kazakhstan: burned area, the harmonized record and the naive splice, each scaled to its 2013-2021 mean](figures/03_burned_area.png)
+
+| Area | Burned area: times less in 2019-2023 than 2001-2005 | Harmonized | Naive splice | Fire per km2 burned, 2013-2021 / 2003-2011: harmonized, naive, MODIS alone | Correlation of yearly totals: harmonized, naive |
+| --- | --- | --- | --- | --- | --- |
+| Kazakhstan | 3.22 | 3.17 | 1.37 | 1.03, 2.10, 1.03 | 0.95, 0.77 |
+| World | 1.27 | 1.19 | 0.35 | 1.07, 2.96, 1.07 | 0.86, -0.68 |
+
+Over the whole world the naive splice says fire rose 2.9 times; burned area and the harmonized record both say it
+fell. In 27 of 28 areas (Kazakhstan, its 17 regions, the world and 9 world regions) the harmonized decline is
+closer to the burned-area decline than the naive one, and in every area the harmonized 2012 step stays within 0.11
+of the step MODIS alone shows, while the naive step is 1.8 to 4.7 times that. Mangystau has too little burned
+area before 2012 for the step. The exception is Kyzylorda, where burned area
+grew while hot spots fell. Full table: `results/burned_area_check.json` and the Methods page.
+
+Limits: burned area uses MODIS active fires as one of its inputs, so before 2012 the check is not fully
+independent; after 2012 the harmonized record is VIIRS alone. Burned area and hot spots measure different things.
+The comparison ends in 2023 because MCD64CMQ Collection 6.1 ends in early 2024.
 
 ## Sensitivity (`scripts/07_sensitivity.py`)
 
