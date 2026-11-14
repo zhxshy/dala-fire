@@ -114,6 +114,20 @@ python run_all.py
 | 5 | `scripts/05_validate.py` | `validation.json`, `error_by_count.csv`, `figures/02_before_after.png` |
 | 6 | `scripts/06_export_web.py` | `web/public/data/`: files the web app loads (about 45 MB, committed to git) |
 
+### Automatic updates (`scripts/09_update.py`, `.github/workflows/update.yml`)
+
+Every 3 hours a GitHub Actions job asks the FIRMS area API for near-real-time detections (MODIS, NOAA-20, NOAA-21),
+applies the same cleaning, mask, grid and factors to them, adds each UTC day once it is complete, commits the
+data and redeploys the site. The last two published days are fetched again, because near-real-time data keeps
+arriving. Run against the pipeline's own input for the same days, the updater reproduces the pipeline's output
+exactly (1,836,281 cell-day rows, no difference). It refuses to write if the API returns an error page, no rows
+at all, or implausible counts.
+
+The FIRMS MAP_KEY is stored only as the repository secret `FIRMS_MAP_KEY`. It is not in the code, the logs or the
+site, and the browser never calls the FIRMS API. Without the secret the job does nothing. A full rerun of
+`run_all.py` replaces the updater's days with whatever the raw download holds; the next scheduled run adds
+them back.
+
 Numbers to expect with the download above:
 
 | Check | Value |

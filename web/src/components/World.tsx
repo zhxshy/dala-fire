@@ -176,7 +176,7 @@ export function World({ area, onArea }: { area: Area; onArea: (a: Area) => void 
         <CalendarLegend mode={mode} max={view.max} />
         <details className="help"><summary>What am I looking at?</summary>
           One cell per month, in fire cell-days: 0.01° cells with at least one clean detection on a day, summed over the area.
-          "Harmonized" puts the MODIS years on the VIIRS (Suomi NPP) scale; hatched months are modelled from MODIS.
+          "Harmonized" puts the MODIS years on the VIIRS (Suomi NPP) scale; months above the dashed line are modelled from MODIS.
           "Naive splice" shows the record as it comes: MODIS until 2011, VIIRS from 2012. "Anomaly" compares each month with the
           median of the same calendar month in all years.
         </details>

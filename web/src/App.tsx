@@ -58,6 +58,7 @@ export function App() {
   const mapRef = useRef<HTMLElement>(null), calPanelRef = useRef<HTMLElement>(null)
   const [showIntro, setShowIntro] = useState(() => !introHidden())
   const [copied, setCopied] = useState(false)
+  const [fileNote, setFileNote] = useState('')
 
   useEffect(() => {
     (async () => {
@@ -159,6 +160,22 @@ export function App() {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { window.prompt('Copy this link', url) }
   }
 
+  // a GeoJSON file with a polygon becomes the selected area (first polygon, outer ring, thinned to 200 points)
+  const loadGeoJson = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const g = JSON.parse(await file.text())
+      const geom = g.type === 'FeatureCollection' ? g.features?.[0]?.geometry : g.type === 'Feature' ? g.geometry : g
+      const outer = geom?.type === 'Polygon' ? geom.coordinates[0] : geom?.type === 'MultiPolygon' ? geom.coordinates[0][0] : null
+      let ring: [number, number][] = (outer ?? []).map((p: number[]) => [Number(p[0]), Number(p[1])])
+      if (ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) ring = ring.slice(0, -1)
+      if (ring.length < 3 || ring.some(p => !Number.isFinite(p[0]) || !Number.isFinite(p[1]))) throw new Error('no polygon')
+      const step = Math.ceil(ring.length / 200)
+      setArea({ kind: 'polygon', ring: ring.filter((_, i) => i % step === 0) })
+      setFileNote('')
+    } catch { setFileNote('Could not read a polygon from this file. It needs one GeoJSON Polygon in longitude, latitude.') }
+  }
+
   const toggleMask = async () => setMask(mask ? null : await loadStaticMask())
 
   async function downloadHotspots() {
@@ -252,6 +269,10 @@ export function App() {
                 ))}
                 <button type="submit">Apply</button>
               </form>
+              <label className="coords"><span>GeoJSON polygon:</span>
+                <input type="file" accept=".geojson,.json,application/geo+json,application/json" onChange={e => loadGeoJson(e.target.files?.[0])} />
+              </label>
+              {fileNote && <p className="warn">{fileNote}</p>}
             </details>
             <p className="selected">Selected: <b>{label}</b>. Shift-click regions on the map to combine them.</p>
             <div className="row"><button onClick={copyLink}>Copy link to this view</button>{copied && <span className="copied">Link copied</span>}</div>
@@ -336,7 +357,7 @@ export function App() {
             <SeasonLegend season={view.season} />
             <div className="subhead">Every year, week by week</div>
             <div className="scroll"><WeekGrid grid={view.weeks} /></div>
-            <div className="legend"><span>Dark blue: little fire · yellow: most (log scale, same as the calendar)</span>
+            <div className="legend"><span>Light: little fire · dark: most (square-root scale, same as the calendar)</span>
               <span>Above the dashed line: modelled from MODIS</span><span><i className="swatch" style={{ background: '#cfcfcf' }} /> no data</span></div>
             <details className="help"><summary>What am I looking at?</summary>
               Harmonized fire cell-days per week in the selected area. The black line is the median week of
@@ -362,9 +383,9 @@ export function App() {
             <div className="scroll"><Calendar ref={calRef} months={view.months} clim={view.clim} mode={mode} selected={selected} onSelect={k => setSelected(k === selected ? null : k)} /></div>
             <CalendarLegend mode={mode} max={view.max} />
             <details className="help"><summary>What am I looking at?</summary>
-              Each square is one month; darker blue means less fire, yellow means more (log scale). Switch to "Naive splice" to
-              see the false jump in 2012 when VIIRS replaced MODIS, and back to "Harmonized" to see it removed. Hatched months
-              before 2012 are modelled from MODIS; hover for the likely range. "Anomaly" compares each month with the median of
+              Each square is one month; the darker, the more fire (square-root scale: a quarter of the fire is half as dark). Switch to "Naive splice" to
+              see the false jump in 2012 when VIIRS replaced MODIS, and back to "Harmonized" to see it removed. Months above the
+              dashed line (before 2012) are modelled from MODIS; hover for the likely range. "Anomaly" compares each month with the median of
               the same month in {view.refFirst}–{lastYear - 1} (set by "Compare with" in section 2). Click a month to show its fires on
               the map, or focus the calendar and move with the arrow keys.
             </details>

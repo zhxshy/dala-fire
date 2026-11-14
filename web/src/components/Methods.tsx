@@ -116,7 +116,7 @@ export function Methods({ model }: { model: Model }) {
       <p>Questions raised by participants in the challenge discussion (<a href="https://github.com/nasa/spaceapps/discussions/1879" target="_blank" rel="noreferrer">nasa/spaceapps #1879</a>), and how Dala Fire answers them.</p>
       <ul>
         <li><b>MODIS or VIIRS scale?</b> VIIRS (Suomi NPP). It is the scale of today’s and future fire data, so the record continues
-          unchanged on NOAA-20 and NOAA-21 after MODIS ends. The cost: years before 2012 are modelled from MODIS. They are hatched,
+          unchanged on NOAA-20 and NOAA-21 after MODIS ends. The cost: years before 2012 are modelled from MODIS. They are marked,
           carry an uncertainty band, and cannot show small fires MODIS never saw.</li>
         <li><b>FIRMS archive or swath products?</b> The FIRMS Archive Download (standard data, near-real-time only after the last
           standard date), with the filters listed above. Cloud cover and view angle are not modelled (see Limitations).</li>

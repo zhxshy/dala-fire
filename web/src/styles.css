@@ -1,12 +1,12 @@
 :root {
-  --ink: #1f2328; --muted: #5d6670; --line: #dfe3e8; --bg: #f6f7f9; --panel: #ffffff; --accent: #c4561a;
+  --ink: #22262b; --muted: #535c66; --line: #e3e6ea; --bg: #f7f6f3; --panel: #ffffff; --accent: #c4561a;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: var(--ink); background: var(--bg);
-  font-size: 15px; line-height: 1.45;
+  font-size: 15px; line-height: 1.55;
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
 h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
-h2 { margin: 0 0 10px; font-size: 16px; }
+h2 { margin: 0 0 12px; font-size: 17px; letter-spacing: -0.005em; }
 h3 { margin: 22px 0 8px; font-size: 15px; }
 a { color: #2d4f8f; }
 
@@ -24,12 +24,13 @@ button {
   background: #fff; color: var(--ink); cursor: pointer;
 }
 button:hover { border-color: #b9c0c8; }
-button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+button.on { background: #fbefe6; color: #7a3410; border-color: #e3a983; font-weight: 600; }
 button:disabled { opacity: 0.6; cursor: wait; }
 select, input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 
-main { display: grid; grid-template-columns: 360px 1fr; gap: 14px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+main { display: grid; grid-template-columns: 360px 1fr; gap: 18px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px 20px; min-width: 0; }
+.panel p, .panel .help, .panel .legend { max-width: 880px; }
 .panel.area { grid-row: span 1; }
 .panel.mapbox { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 main > .panel:nth-child(n + 3) { grid-column: 1 / -1; }
@@ -37,23 +38,25 @@ main > .panel:nth-child(n + 3) { grid-column: 1 / -1; }
 .mapbox .row { padding: 8px 12px; }
 
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-.row.small, .small { font-size: 13px; color: var(--muted); justify-content: space-between; }
+.row.small, .small { font-size: 13.5px; color: var(--muted); justify-content: space-between; }
 .area label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .area select { width: 100%; }
 .coords { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin: 6px 0; font-size: 13px; }
 .coords input { width: 62px; }
+.coords input[type=file] { width: 100%; border: 0; padding: 2px 0; }
+.area label.coords { flex-direction: row; }
 .hint { font-size: 13px; color: var(--accent); margin: 4px 0; }
 .selected { font-size: 13px; color: var(--muted); }
 .warn { font-size: 13px; background: #f9eeda; border-radius: 6px; padding: 6px 8px; }
 details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
-.help { margin-top: 8px; font-size: 13px; color: var(--muted); max-width: 820px; }
+.help { margin-top: 10px; font-size: 13.5px; line-height: 1.6; color: var(--muted); max-width: 820px; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: #fcfbf9; }
 .card-label { font-size: 13px; color: var(--muted); }
-.card-value { font-size: 26px; font-weight: 650; }
+.card-value { font-size: 28px; font-weight: 650; line-height: 1.25; }
 .card-value small { font-size: 13px; font-weight: 400; color: var(--muted); }
-.card-ref { font-size: 13px; margin-top: 2px; }
+.card-ref { font-size: 13.5px; margin-top: 4px; color: var(--muted); }
 .card-verdict { font-size: 14px; margin-top: 6px; }
 
 .scroll { overflow-x: auto; }
@@ -62,12 +65,12 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .calendar .cell { cursor: pointer; }
 .calendar .cell:hover rect:first-child { stroke: #1f2328; stroke-width: 1; }
 
-.legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .legend .ramp { display: inline-flex; align-items: center; gap: 0; }
 .legend .ramp > span { margin: 0 6px; }
-.legend .ramp i { display: inline-block; width: 14px; height: 10px; }
+.legend .ramp i { display: inline-block; width: 16px; height: 11px; }
 .legend .swatch { display: inline-block; width: 14px; height: 10px; vertical-align: middle; margin-right: 4px; border: 1px solid #bbb; }
-.legend .swatch.hatch { background: repeating-linear-gradient(45deg, #3b496c 0 2px, #9aa3b5 2px 4px); }
+.legend .swatch.hatch { background: repeating-linear-gradient(45deg, #e8873f 0 2px, #7a4a2a 2px 3px); }
 .legend .swatch.dashed { border: 1px dashed #333; }
 .legend .line { display: inline-block; width: 22px; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
 .legend .line.dashed { border-top-style: dashed; }
@@ -91,6 +94,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
 .topdays th, .topdays td { border-bottom: 1px solid var(--line); padding: 5px 10px; text-align: left; white-space: nowrap; }
 .topdays td:nth-child(3), .topdays th:nth-child(3), .topdays td:nth-child(4), .topdays th:nth-child(4) { text-align: right; }
 .topdays tr.on td { background: #fbefe6; }
+.topdays tbody tr:hover td { background: #faf8f4; }
 .topdays button { font-size: 12px; padding: 2px 8px; }
 .tablewrap { overflow-x: auto; }
 
@@ -110,3 +114,6 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
 button.link { background: none; border: 0; padding: 0; color: #0b5cad; text-decoration: underline; cursor: pointer; font: inherit; }
 .warn-text { color: #9a3d00; }
 @media (max-width: 860px) { .methods { padding: 14px 14px; } .methods table { display: block; overflow-x: auto; max-width: 100%; } .methods code { overflow-wrap: anywhere; } }
+.mapbox.panel { padding: 0; }
+.subhead { margin-top: 20px; }
+@media (max-width: 860px) { .panel { padding: 14px 14px 16px; } }

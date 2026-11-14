@@ -1,0 +1,47 @@
+# Every 3 hours: add the latest complete days from FIRMS near-real-time data, commit them, and redeploy the site.
+# One-time setup: repository Settings -> Secrets and variables -> Actions -> New repository secret,
+# name FIRMS_MAP_KEY, value = your FIRMS MAP_KEY. Without the secret this workflow does nothing.
+# The key is used only inside this job. It is never written to the repository, the logs or the site.
+name: Update data
+
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write    # commit the updated data files
+  actions: write     # start the Deploy site workflow afterwards
+
+concurrency:
+  group: data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -q pandas pyarrow numpy "shapely>=2.0"
+      - name: Fetch the latest days from FIRMS
+        env:
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+        run: python scripts/09_update.py
+      - name: Commit and redeploy if the data changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- web/public/data; then
+            echo "No new data."
+            exit 0
+          fi
+          through=$(python -c "import json; print(json.load(open('web/public/data/model.json', encoding='utf-8'))['data_through'])")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/public/data
+          git commit -m "Data update: through $through (FIRMS near-real-time)"
+          git push
+          gh workflow run deploy.yml --ref "${GITHUB_REF_NAME}"

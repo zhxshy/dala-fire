@@ -23,7 +23,7 @@ export function WeekGrid({ grid }: { grid: Grid }) {
         </g>
       ))}
       <line x1={LEFT} x2={LEFT + WEEKS * CW} y1={TOP + (grid.years.indexOf(2012)) * CH} y2={TOP + (grid.years.indexOf(2012)) * CH}
-            stroke="#c4561a" strokeWidth={grid.years.includes(2012) ? 1.5 : 0} strokeDasharray="4 3" />
+            stroke="#1f2328" strokeWidth={grid.years.includes(2012) ? 1.2 : 0} strokeDasharray="4 3" />
     </svg>
   )
 }

@@ -45,7 +45,7 @@ export const Calendar = forwardRef<SVGSVGElement, Props>(function Calendar({ mon
          aria-label="Monthly burning calendar. Arrow keys move between months and show that month's fires on the map.">
       <defs>
         <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" strokeWidth="1.3" strokeOpacity="0.55" />
+          <line x1="0" y1="0" x2="0" y2="5" stroke="#1f2328" strokeWidth="1" strokeOpacity="0.45" />
         </pattern>
       </defs>
       {MONTHS.map((m, i) => (
@@ -63,7 +63,8 @@ export const Calendar = forwardRef<SVGSVGElement, Props>(function Calendar({ mon
         if (!covered || (mode === 'vnp' && p.year < 2012)) fill = NO_DATA
         else if (mode === 'anomaly') fill = p.partial ? '#ffffff' : diverging(anomaly(p, clim))
         else fill = sequential(v, max)
-        const hatch = mode === 'harm' && covered && p.modelledShare > 0.5
+        // before 2012 every month is modelled: one line marks that, so only later modelled months are hatched
+        const hatch = mode === 'harm' && covered && p.modelledShare > 0.5 && p.year >= 2012
         const a = anomaly(p, clim)
         const tip = [
           `${MONTHS[col]} ${p.year}${p.partial ? ' (in progress)' : ''}`,
@@ -79,11 +80,15 @@ export const Calendar = forwardRef<SVGSVGElement, Props>(function Calendar({ mon
             <rect x={x + 1} y={yy + 1} width={CW - 2} height={CH - 2} fill={fill} />
             {hatch && <rect x={x + 1} y={yy + 1} width={CW - 2} height={CH - 2} fill="url(#hatch)" />}
             {p.partial && <rect x={x + 1.5} y={yy + 1.5} width={CW - 3} height={CH - 3} fill="none" stroke="#333" strokeDasharray="2 2" />}
-            {selected === p.key && <rect x={x} y={yy} width={CW} height={CH} fill="none" stroke="#c4561a" strokeWidth={2.5} />}
+            {selected === p.key && <rect x={x} y={yy} width={CW} height={CH} fill="none" stroke="#1f2328" strokeWidth={2.5} />}
             <title>{tip}</title>
           </g>
         )
       })}
+      {mode === 'harm' && years.includes(2012) && years[0] < 2012 && (
+        <line x1={LEFT} x2={LEFT + 12 * CW} y1={TOP + years.indexOf(2012) * CH} y2={TOP + years.indexOf(2012) * CH}
+              stroke="#1f2328" strokeWidth={1.2} strokeDasharray="4 3" />
+      )}
     </svg>
   )
 })
@@ -101,11 +106,12 @@ export function CalendarLegend({ mode, max }: { mode: Mode; max: number }) {
       ) : (
         <span className="ramp">
           <span>0</span>
-          {stops.map(t => <i key={t} style={{ background: sequential(Math.expm1(t * Math.log1p(max)), max) }} />)}
+          {stops.map(t => <i key={t} style={{ background: sequential(t * t * max, max) }} />)}
           <span>{Math.round(max).toLocaleString('en-US')} fire cell-days / month</span>
         </span>
       )}
-      {mode === 'harm' && <span><i className="swatch hatch" /> modelled from MODIS</span>}
+      {mode === 'harm' && <span><i className="line dashed" /> above the line: modelled from MODIS</span>}
+      {mode === 'harm' && <span><i className="swatch hatch" /> VIIRS outage, filled from MODIS</span>}
       <span><i className="swatch" style={{ background: NO_DATA }} /> no data</span>
       <span><i className="swatch dashed" /> month in progress</span>
     </div>
