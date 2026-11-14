@@ -1,0 +1,7 @@
+pandas
+pyarrow
+numpy
+scipy
+statsmodels
+matplotlib
+shapely>=2.0

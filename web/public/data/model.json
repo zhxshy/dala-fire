@@ -1,0 +1,270 @@
+{
+ "data_through": "2026-11-13",
+ "generated": "2026-11-14T04:45+00:00",
+ "grid": {
+  "res_deg": 0.01,
+  "ci0": 4059,
+  "cj0": 4648,
+  "epoch": "2000-11-01"
+ },
+ "regions": [
+  {
+   "id": 0,
+   "iso": "KZ-10",
+   "en": "Abay Region",
+   "kk": "Абай облысы",
+   "ru": "Абайская область"
+  },
+  {
+   "id": 1,
+   "iso": "KZ-11",
+   "en": "Akmola Region",
+   "kk": "Ақмола облысы",
+   "ru": "Акмолинская область"
+  },
+  {
+   "id": 2,
+   "iso": "KZ-75",
+   "en": "Almaty",
+   "kk": "Алматы",
+   "ru": "Алматы"
+  },
+  {
+   "id": 3,
+   "iso": "KZ-19",
+   "en": "Almaty Region",
+   "kk": "Алматы облысы",
+   "ru": "Алматинская область"
+  },
+  {
+   "id": 4,
+   "iso": "KZ-15",
+   "en": "Aqtöbe Region",
+   "kk": "Ақтөбе облысы",
+   "ru": "Актюбинская область"
+  },
+  {
+   "id": 5,
+   "iso": "KZ-71",
+   "en": "Astana",
+   "kk": "Астана",
+   "ru": "Астана"
+  },
+  {
+   "id": 6,
+   "iso": "KZ-23",
+   "en": "Atyrau Region",
+   "kk": "Атырау облысы",
+   "ru": "Атырауская область"
+  },
+  {
+   "id": 7,
+   "iso": "KZ-63",
+   "en": "East Kazakhstan Region",
+   "kk": "Шығыс Қазақстан облысы",
+   "ru": "Восточно-Казахстанская область"
+  },
+  {
+   "id": 8,
+   "iso": "KZ-31",
+   "en": "Jambyl Region",
+   "kk": "Жамбыл облысы",
+   "ru": "Жамбылская область"
+  },
+  {
+   "id": 9,
+   "iso": "KZ-33",
+   "en": "Jetisu Region",
+   "kk": "Жетісу облысы",
+   "ru": "Жетысуская область"
+  },
+  {
+   "id": 10,
+   "iso": "KZ-35",
+   "en": "Karaganda Region",
+   "kk": "Қарағанды облысы",
+   "ru": "Карагандинская область"
+  },
+  {
+   "id": 11,
+   "iso": "KZ-39",
+   "en": "Kostanay Region",
+   "kk": "Қостанай облысы",
+   "ru": "Костанайская область"
+  },
+  {
+   "id": 12,
+   "iso": "KZ-43",
+   "en": "Kyzylorda Region",
+   "kk": "Қызылорда облысы",
+   "ru": "Кызылординская область"
+  },
+  {
+   "id": 13,
+   "iso": "KZ-47",
+   "en": "Mangystau Region",
+   "kk": "Маңғыстау облысы",
+   "ru": "Мангистауская область"
+  },
+  {
+   "id": 14,
+   "iso": "KZ-59",
+   "en": "North Kazakhstan Region",
+   "kk": "Солтүстік Қазақстан облысы",
+   "ru": "Северо-Казахстанская область"
+  },
+  {
+   "id": 15,
+   "iso": "KZ-55",
+   "en": "Pavlodar Region",
+   "kk": "Павлодар облысы",
+   "ru": "Павлодарская область"
+  },
+  {
+   "id": 16,
+   "iso": "KZ-79",
+   "en": "Shymkent",
+   "kk": "Шымкент",
+   "ru": "Шымкент"
+  },
+  {
+   "id": 17,
+   "iso": "KZ-61",
+   "en": "Turkistan Region",
+   "kk": "Түркістан облысы",
+   "ru": "Туркестанская область"
+  },
+  {
+   "id": 18,
+   "iso": "KZ-62",
+   "en": "Ulytau Region",
+   "kk": "Ұлытау облысы",
+   "ru": "Улутауская область"
+  },
+  {
+   "id": 19,
+   "iso": "KZ-27",
+   "en": "West Kazakhstan Region",
+   "kk": "Батыс Қазақстан облысы",
+   "ru": "Западно-Казахстанская область"
+  }
+ ],
+ "factors": {
+  "modis_to_vnp_national": 2.0052659046038155,
+  "terra_bridge": 1.95480572597137,
+  "aqua_bridge": 1.859602391338506,
+  "vj1_to_vnp": 0.9978798438221588,
+  "vj2_to_vnp": 1.0357367624296236,
+  "calibration_window": [
+   "2012-01-20",
+   "2021-12-31"
+  ],
+  "tile_deg": 3.0
+ },
+ "validation": {
+  "days_used": 5014,
+  "loyo_2012_2021": {
+   "naive (no correction)": {
+    "national_median_abs_pct": 50.8,
+    "national_max_abs_pct": 53.0,
+    "tile_median_abs_pct": 51.1,
+    "tile_p90_abs_pct": 60.2
+   },
+   "one national factor": {
+    "national_median_abs_pct": 2.9,
+    "national_max_abs_pct": 6.3,
+    "tile_median_abs_pct": 10.6,
+    "tile_p90_abs_pct": 25.3
+   },
+   "3-deg tiles, no shrinkage": {
+    "national_median_abs_pct": 3.1,
+    "national_max_abs_pct": 7.0,
+    "tile_median_abs_pct": 7.6,
+    "tile_p90_abs_pct": 20.4
+   },
+   "3-deg tiles, shrinkage 200": {
+    "national_median_abs_pct": 3.0,
+    "national_max_abs_pct": 7.0,
+    "tile_median_abs_pct": 7.6,
+    "tile_p90_abs_pct": 20.6
+   },
+   "3-deg tiles x season, shrinkage 200": {
+    "national_median_abs_pct": 3.2,
+    "national_max_abs_pct": 7.1,
+    "tile_median_abs_pct": 7.6,
+    "tile_p90_abs_pct": 20.1
+   }
+  },
+  "error_vs_size": [
+   {
+    "size": "3-10",
+    "n": 36209,
+    "p10": 0.143,
+    "p50": 0.803,
+    "p90": 2.206
+   },
+   {
+    "size": "10-30",
+    "n": 29117,
+    "p10": 0.362,
+    "p50": 0.862,
+    "p90": 1.729
+   },
+   {
+    "size": "30-100",
+    "n": 20653,
+    "p10": 0.539,
+    "p50": 0.917,
+    "p90": 1.458
+   },
+   {
+    "size": "100-300",
+    "n": 7710,
+    "p10": 0.659,
+    "p50": 0.931,
+    "p90": 1.29
+   },
+   {
+    "size": "300-1000",
+    "n": 2131,
+    "p10": 0.746,
+    "p50": 0.954,
+    "p90": 1.2
+   },
+   {
+    "size": "1000-3000",
+    "n": 374,
+    "p10": 0.819,
+    "p50": 0.967,
+    "p90": 1.13
+   },
+   {
+    "size": "3000+",
+    "n": 62,
+    "p10": 0.853,
+    "p50": 0.973,
+    "p90": 1.091
+   }
+  ],
+  "share_of_viirs_where_modis_zero_pct": {
+   "0.25": 8.3,
+   "0.5": 4.5,
+   "1": 2.1
+  },
+  "backcast_2012_2013_pct": {
+   "2012": 3.2,
+   "2013": -6.3
+  },
+  "drift_2022_2025_pct": {
+   "2022": 3.0,
+   "2023": -5.1,
+   "2024": -6.8,
+   "2025": -9.5
+  },
+  "seam_2011_to_2012_ratio": {
+   "naive_splice": 4.53,
+   "modis_only": 2.31,
+   "harmonized": 2.28
+  }
+ }
+}
