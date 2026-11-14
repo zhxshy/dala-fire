@@ -12,7 +12,7 @@ Burned area is mapped from changes in surface reflectance (the burn scar), not f
 a different measurement of the same burning. It does use MODIS active fires as a hint, and it is a MODIS product
 throughout, so it has no 2012 seam of its own. Three questions, for Kazakhstan, its regions, the world and nine
 world regions:
-  1. Decline. Burning in 2021-2025 against 2001-2005: does burned area agree with the harmonized record or with
+  1. Decline. Burning in the last five full years of burned area against 2001-2005: does burned area agree with the harmonized record or with
      the naive splice?
   2. Seam. Fire cell-days per km2 burned, 2013-2021 against 2003-2011: a record without a seam keeps this ratio
      about where MODIS alone keeps it; the naive splice roughly doubles it.
@@ -44,7 +44,7 @@ OUT = ROOT / "results"
 HOST, USER, PASSWORD = "fuoco.geog.umd.edu", "fire", "burnt"     # public account, MCD64 User Guide section 4
 DIRS = ["data/MODIS/C61/MCD64CMQ", "data/MODIS/C6/MCD64CMQ"]
 YEARS = (2001, 2025)
-EARLY, LATE = (2001, 2005), (2021, 2025)
+EARLY = (2001, 2005)          # LATE: the last five full years of burned area (MCD64CMQ C6.1 ends in early 2024)
 BEFORE, AFTER = (2003, 2011), (2013, 2021)
 REGIONS = [  # the same boxes as scripts/w2_world.py; first match wins (cell centre)
     ("North America", -170, -50, 15, 75), ("South America", -95, -30, -60, 15), ("Europe", -12, 40, 35, 72),
@@ -154,6 +154,8 @@ for (y, m), p in sorted(files.items()):
 ba = pd.DataFrame(rows)
 months_per_year = ba.groupby("year")["month"].nunique()
 full_years = set(months_per_year[months_per_year == 12].index)
+LATE = (max(full_years) - 4, max(full_years))
+print(f"full years of burned area: {min(full_years)}-{max(full_years)}; decline compared {EARLY} -> {LATE}")
 ba = ba[ba["year"].isin(full_years)].groupby(["unit", "year"])["ba_km2"].sum()
 
 # --- the fire records, yearly, for the same units ---------------------------------------------------------------
@@ -211,6 +213,8 @@ for unit, d in t.groupby("unit"):
                    "seam_step_harmonized": round(step["h"], 2), "seam_step_naive": round(step["naive"], 2),
                    "seam_step_modis_alone": round(step["modis"], 2),
                    "corr_harmonized": round(logcorr(d["h"], d["ba_km2"]), 2), "corr_naive": round(logcorr(d["naive"], d["ba_km2"]), 2)})
+if not result:
+    raise SystemExit("No unit has burned area in every year of both comparison periods.")
 res = pd.DataFrame(result).sort_values("burned_km2_per_year", ascending=False)
 summary = {"source": "MCD64CMQ Collection 6.1 (MODIS burned area, 0.25 degree, monthly), University of Maryland",
            "years": sorted(full_years), "early": EARLY, "late": LATE, "before": BEFORE, "after": AFTER,
@@ -236,7 +240,7 @@ if len(k):
     fig.savefig(ROOT / "figures" / "03_burned_area.png")
 
 pd.set_option("display.width", 220)
-print("\nDecline 2001-2005 -> 2021-2025 (times less now), seam step (fire per km2 burned, 2013-2021 / 2003-2011),"
+print(f"\nDecline {EARLY[0]}-{EARLY[1]} -> {LATE[0]}-{LATE[1]} (times less now), seam step (fire per km2 burned, 2013-2021 / 2003-2011),"
       "\nand correlation of log yearly totals with burned area:\n")
 print(res.to_string(index=False))
 print(f"\nwritten: {OUT / 'burned_area_check.json'}, {OUT / 'burned_area_annual.csv'}, figures/03_burned_area.png")
