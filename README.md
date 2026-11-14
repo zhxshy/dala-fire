@@ -74,7 +74,13 @@ Every push to `main` builds the site and publishes it on GitHub Pages
   Many 375 m VIIRS pixels from one fire fall into one cell, which removes most of the pixel-size
   difference from 1 km MODIS.
 - **Sensor gaps.** Days on which a satellite delivered nothing are inferred from the detections
-  (see the docstring of `03_availability.py`) and will be treated as "no data", not as zero.
+  (see the docstring of `03_availability.py`) and are treated as "no data", not as zero. They are
+  cross-checked with a snapshot of the FIRMS API `missing_data` table
+  (`scripts/ref/firms_missing_dates.csv`, retrieved 2026-11-14): of its 178 listed days, 127 were
+  already flagged by our rules, 13 (winter days with no detections) were added, and 38 were kept
+  because the archive holds complete data for them (S-NPP, May 2026: S-NPP/NOAA-20 = 0.99; NOAA-21
+  near-real-time entries for Feb-Mar 2024, which our standard-product archive covers). Validation
+  numbers did not change. Per-day outcomes: `data/interim/firms_crosscheck.csv`.
 
 - **Harmonization.** Everything is put on the VIIRS S-NPP scale. MODIS (Terra or Aqua) counts are
   multiplied by a factor per 3-degree tile, fitted on 2012-2021 days when Terra, Aqua and S-NPP all

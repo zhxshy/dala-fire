@@ -79,7 +79,7 @@ export function Methods({ model }: { model: Model }) {
           are marked indicative.</li>
         <li>Fire cell-days count detected burning, not burned area or emissions.</li>
         <li>Clouds, smoke and overpass timing hide some fires from both sensors.</li>
-        <li>Data gaps are inferred from the detections themselves and catch only whole-day, country-wide outages.</li>
+        <li>Data gaps are inferred from the detections themselves (whole-day, country-wide outages only) and cross-checked with the FIRMS <code>missing_data</code> list: 127 of its 178 days were already flagged, 13 more were added, and 38 were kept because our archive holds complete data for them.</li>
         <li>The static-source mask also removes about 3.8% of vegetation-fire detections that fall next to flares.</li>
       </ul>
 

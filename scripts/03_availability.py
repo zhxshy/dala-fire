@@ -16,13 +16,23 @@ with zero raw detections is suspicious. A run of consecutive zero days is flagge
   rule "sibling" : the run lasts >= SIBLING_MIN_DAYS and the other satellites carrying the same
                    instrument averaged >= SIBLING_MIN_RATE detections per day during it.
 Limits: only full-day, country-wide gaps are found (partial swath losses are not); winter runs with
-few expected detections stay "available". Cross-check the result with the FIRMS `missing_data` API.
+few expected detections stay "available".
+
+Cross-check with FIRMS. scripts/ref/firms_missing_dates.csv is a snapshot of the FIRMS API
+`missing_data` table (retrieved 2026-11-14). A day it lists is also marked unavailable (rule "firms")
+when our archive has zero raw detections for that sensor on that day. A listed day on which the
+archive does hold detections is kept: the table describes the FIRMS database, and our archive
+download was checked to be complete on those days (e.g. S-NPP, May 2026: S-NPP/NOAA-20 = 0.99).
+Every listed day and its outcome is written to data/interim/firms_crosscheck.csv.
 
 AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 """
 import pandas as pd
 
-from common import FAMILY, INT, SENSORS
+from common import FAMILY, INT, SENSORS, ROOT
+
+FIRMS_SAT = {"Terra (MODIS)": "MODIS_T", "Aqua (MODIS)": "MODIS_A", "Suomi NPP (VIIRS)": "VNP",
+             "NOAA-20 (VIIRS)": "VJ1", "NOAA-21 (VIIRS)": "VJ2"}
 
 EXPECTED_MIN = 50       # expected detections during a zero run to call it a gap
 OTHERS_MIN_SHARE = 0.1  # other sensors must have seen at least this share of the expectation
@@ -67,7 +77,29 @@ for s in SENSORS:
                                       "available": available.values}))
 
 avail = pd.concat(avail_frames, ignore_index=True)
-gaps = pd.DataFrame(gap_rows)
+
+# --- cross-check with the FIRMS missing_data table ---------------------------------------------
+fm = pd.read_csv(ROOT / "scripts" / "ref" / "firms_missing_dates.csv", parse_dates=["date"])
+fm["sensor"] = fm["satellite"].map(FIRMS_SAT)
+x = fm.merge(avail, on=["sensor", "date"], how="left")
+x["outcome"] = "outside_record"
+x.loc[x["available"].eq(False), "outcome"] = "already_flagged"
+add = x["available"].eq(True) & x["n_raw"].eq(0)
+x.loc[add, "outcome"] = "added_from_firms"
+x.loc[x["available"].eq(True) & x["n_raw"].gt(0), "outcome"] = "data_present_kept"
+x[["sensor", "date", "product", "n_raw", "outcome"]].to_csv(INT / "firms_crosscheck.csv", index=False)
+added = x.loc[add, ["sensor", "date"]].assign(firms=True)
+avail = avail.merge(added, on=["sensor", "date"], how="left")
+avail.loc[avail["firms"].eq(True), "available"] = False
+avail = avail.drop(columns="firms")
+for s_, d in added.groupby("sensor")["date"]:
+    d = d.sort_values().reset_index(drop=True)
+    for _, run in d.groupby((d.diff().dt.days != 1).cumsum()):
+        gap_rows.append({"sensor": s_, "start": run.iloc[0].date(), "end": run.iloc[-1].date(), "days": len(run),
+                         "expected_det": None, "others_det": None, "rule": "firms"})
+print("FIRMS cross-check:", x["outcome"].value_counts().to_dict())
+
+gaps = pd.DataFrame(gap_rows).sort_values(["sensor", "start"]).reset_index(drop=True)
 avail.to_parquet(INT / "sensor_availability.parquet", index=False)
 gaps.to_csv(INT / "sensor_gaps.csv", index=False)
 
