@@ -1,0 +1,202 @@
+{
+ "years_tested": [
+  2012,
+  2021
+ ],
+ "calibration_days": 3613,
+ "chosen_model": "tile",
+ "month_model_gain_pct_points": 0.5,
+ "loyo": {
+  "naive": {
+   "global_median_abs_pct": 63.9,
+   "global_max_abs_pct": 64.7,
+   "tile_median_abs_pct": 63.2,
+   "tile_p90_abs_pct": 80.9,
+   "tile_month_median_abs_pct": 65.4
+  },
+  "global": {
+   "global_median_abs_pct": 0.9,
+   "global_max_abs_pct": 5.0,
+   "tile_median_abs_pct": 27.2,
+   "tile_p90_abs_pct": 63.2,
+   "tile_month_median_abs_pct": 28.4
+  },
+  "tile": {
+   "global_median_abs_pct": 0.9,
+   "global_max_abs_pct": 3.9,
+   "tile_median_abs_pct": 9.0,
+   "tile_p90_abs_pct": 31.6,
+   "tile_month_median_abs_pct": 16.4
+  },
+  "tile_month": {
+   "global_median_abs_pct": 0.9,
+   "global_max_abs_pct": 3.4,
+   "tile_median_abs_pct": 8.5,
+   "tile_p90_abs_pct": 30.3,
+   "tile_month_median_abs_pct": 12.2
+  }
+ },
+ "by_region": [
+  {
+   "region": "Africa, south of the equator",
+   "tiles": 125,
+   "viirs_celldays_per_year": 3369115,
+   "naive": 63.9,
+   "global": 1.0,
+   "tile": 1.8,
+   "tile_month": 1.7,
+   "bias_chosen_pct": 0.0
+  },
+  {
+   "region": "Africa, north of the equator",
+   "tiles": 260,
+   "viirs_celldays_per_year": 2434895,
+   "naive": 64.7,
+   "global": 2.8,
+   "tile": 2.0,
+   "tile_month": 1.6,
+   "bias_chosen_pct": -0.1
+  },
+  {
+   "region": "South America",
+   "tiles": 226,
+   "viirs_celldays_per_year": 1312708,
+   "naive": 60.3,
+   "global": 9.6,
+   "tile": 1.5,
+   "tile_month": 1.5,
+   "bias_chosen_pct": 0.1
+  },
+  {
+   "region": "East and Southeast Asia",
+   "tiles": 224,
+   "viirs_celldays_per_year": 937372,
+   "naive": 70.6,
+   "global": 19.0,
+   "tile": 1.0,
+   "tile_month": 1.2,
+   "bias_chosen_pct": -0.2
+  },
+  {
+   "region": "Northern and Central Asia",
+   "tiles": 471,
+   "viirs_celldays_per_year": 695658,
+   "naive": 58.1,
+   "global": 15.3,
+   "tile": 1.4,
+   "tile_month": 1.6,
+   "bias_chosen_pct": 1.9
+  },
+  {
+   "region": "North America",
+   "tiles": 432,
+   "viirs_celldays_per_year": 495642,
+   "naive": 58.3,
+   "global": 15.0,
+   "tile": 2.1,
+   "tile_month": 2.2,
+   "bias_chosen_pct": 0.6
+  },
+  {
+   "region": "Australia and Oceania",
+   "tiles": 132,
+   "viirs_celldays_per_year": 484249,
+   "naive": 56.9,
+   "global": 18.5,
+   "tile": 2.2,
+   "tile_month": 1.7,
+   "bias_chosen_pct": 1.1
+  },
+  {
+   "region": "South Asia",
+   "tiles": 84,
+   "viirs_celldays_per_year": 377934,
+   "naive": 77.5,
+   "global": 38.0,
+   "tile": 3.8,
+   "tile_month": 4.0,
+   "bias_chosen_pct": -0.5
+  },
+  {
+   "region": "Europe",
+   "tiles": 171,
+   "viirs_celldays_per_year": 173840,
+   "naive": 58.6,
+   "global": 14.0,
+   "tile": 3.2,
+   "tile_month": 3.1,
+   "bias_chosen_pct": 0.6
+  },
+  {
+   "region": "Other",
+   "tiles": 518,
+   "viirs_celldays_per_year": 22157,
+   "naive": 66.9,
+   "global": 10.4,
+   "tile": 7.7,
+   "tile_month": 8.5,
+   "bias_chosen_pct": -4.0
+  }
+ ],
+ "error_vs_size": [
+  {
+   "size": "3-10",
+   "n": 22271,
+   "p10": 0.296,
+   "p50": 1.536,
+   "p90": 4.826
+  },
+  {
+   "size": "10-30",
+   "n": 27316,
+   "p10": 0.44,
+   "p50": 1.239,
+   "p90": 2.987
+  },
+  {
+   "size": "30-100",
+   "n": 32291,
+   "p10": 0.515,
+   "p50": 1.101,
+   "p90": 2.111
+  },
+  {
+   "size": "100-300",
+   "n": 26233,
+   "p10": 0.617,
+   "p50": 1.042,
+   "p90": 1.693
+  },
+  {
+   "size": "300-1000",
+   "n": 20993,
+   "p10": 0.71,
+   "p50": 1.004,
+   "p90": 1.443
+  },
+  {
+   "size": "1000-3000",
+   "n": 12336,
+   "p10": 0.774,
+   "p50": 0.991,
+   "p90": 1.305
+  },
+  {
+   "size": "3000+",
+   "n": 12946,
+   "p10": 0.821,
+   "p50": 0.979,
+   "p90": 1.164
+  }
+ ],
+ "backcast_pct": {
+  "2012": 4.2,
+  "2013": 0.9
+ },
+ "seam_2011_to_2012_ratio": {
+  "naive_splice": 2.58,
+  "modis_only": 1.04,
+  "harmonized": 1.01
+ },
+ "tiles_tested": 1583
+}
