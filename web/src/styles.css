@@ -86,3 +86,10 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
   main { grid-template-columns: 1fr; }
   .map { height: 320px; }
 }
+
+.topdays { border-collapse: collapse; font-size: 13px; width: 100%; max-width: 900px; }
+.topdays th, .topdays td { border-bottom: 1px solid var(--line); padding: 5px 10px; text-align: left; white-space: nowrap; }
+.topdays td:nth-child(3), .topdays th:nth-child(3), .topdays td:nth-child(4), .topdays th:nth-child(4) { text-align: right; }
+.topdays tr.on td { background: #fbefe6; }
+.topdays button { font-size: 12px; padding: 2px 8px; }
+.tablewrap { overflow-x: auto; }

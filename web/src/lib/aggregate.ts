@@ -171,3 +171,62 @@ export function currentComparisons(s: Daily, cal: Calendar): Comparison[] {
   out.push(compareDays(s, cal, py, pm, 1, pdays, `${MONTHS[pm]} ${py} (full month)`))
   return out
 }
+
+// --- seasonal profile: weekly fire cell-days, median and p10-p90 of earlier years, current year on top ---
+export const WEEKS = 52
+
+export interface Season {
+  median: number[]; p10: number[]; p90: number[]   // per week of year
+  current: (number | null)[]                        // current year, complete weeks only
+  year: number; refYears: [number, number]; nRefMin: number
+}
+
+/** Week of year 0..51 (days 365-366 fold into week 51). */
+export function weekOfYear(y: number, m: number, d: number): number {
+  const doy = (Date.UTC(y, m, d) - Date.UTC(y, 0, 1)) / 86400000
+  return Math.min(WEEKS - 1, Math.floor(doy / 7))
+}
+
+export function seasonalProfile(s: Daily, cal: Calendar, refFirst = REF_FIRST): Season {
+  const sum = new Map<number, Float64Array>(), cover = new Map<number, Float64Array>(), len = new Map<number, Float64Array>()
+  const get = (m: Map<number, Float64Array>, y: number) => {
+    let a = m.get(y); if (!a) { a = new Float64Array(WEEKS); m.set(y, a) } return a
+  }
+  for (let k = 0; k < cal.nDays; k++) {
+    const y = cal.year[k], w = weekOfYear(y, cal.month[k], cal.dom[k])
+    get(sum, y)[w] += s.harm[k]; get(cover, y)[w] += cal.hasData[k]; get(len, y)[w] += 1
+  }
+  const fullLen = (y: number, w: number) => (w < WEEKS - 1 ? 7 : (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1)) / 86400000 - 7 * (WEEKS - 1))
+  const year = cal.lastYear
+  const by: number[][] = Array.from({ length: WEEKS }, () => [])
+  for (const [y, a] of sum) {
+    if (y < refFirst || y >= year) continue
+    const c = cover.get(y)!, n = len.get(y)!
+    for (let w = 0; w < WEEKS; w++) {
+      if (n[w] < fullLen(y, w) || c[w] / n[w] < 0.8) continue
+      by[w].push((a[w] * 7) / n[w])
+    }
+  }
+  const sorted = by.map(v => [...v].sort((p, q) => p - q))
+  const cs = sum.get(year), cc = cover.get(year), cn = len.get(year)
+  const current = Array.from({ length: WEEKS }, (_, w) =>
+    cs && cn && cc && cn[w] >= fullLen(year, w) && cc[w] / cn[w] >= 0.8 ? (cs[w] * 7) / cn[w] : null)
+  return { median: sorted.map(v => quantile(v, 0.5)), p10: sorted.map(v => quantile(v, 0.1)),
+           p90: sorted.map(v => quantile(v, 0.9)), current, year, refYears: [refFirst, year - 1],
+           nRefMin: Math.min(...by.map(v => v.length)) }
+}
+
+// --- biggest single days in the area ---
+export interface TopDay { date: string; value: number; source: string; modelled: boolean; monthTotal: number }
+
+export function topDays(s: Daily, cal: Calendar, n = 10, fromYear = 0): TopDay[] {
+  const idx = Array.from({ length: cal.nDays }, (_, k) => k).filter(k => s.harm[k] > 0 && cal.year[k] >= fromYear)
+  idx.sort((a, b) => s.harm[b] - s.harm[a])
+  const iso = (k: number) => `${cal.year[k]}-${String(cal.month[k] + 1).padStart(2, '0')}-${String(cal.dom[k]).padStart(2, '0')}`
+  return idx.slice(0, n).map(k => {
+    // how big the day was against its own month: share of the month total
+    let total = 0
+    for (let j = k - cal.dom[k] + 1; j < cal.nDays && j >= 0 && cal.month[j] === cal.month[k] && cal.year[j] === cal.year[k]; j++) total += s.harm[j]
+    return { date: iso(k), value: s.harm[k], source: cal.source[k], modelled: !!cal.modelled[k], monthTotal: total }
+  })
+}

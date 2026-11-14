@@ -2,7 +2,7 @@
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  buildCalendar, climatology, currentComparisons, dailySeries, monthlyPeriods, MONTHS, yearlyPeriods,
+  buildCalendar, climatology, currentComparisons, dailySeries, monthlyPeriods, MONTHS, seasonalProfile, topDays, yearlyPeriods,
 } from './lib/aggregate'
 import { download, hotspotsCsv, seriesCsv, svgToPng } from './lib/csv'
 import {
@@ -15,6 +15,8 @@ import { Calendar, CalendarLegend, calendarMax, MODE_LABEL, type Mode } from './
 import { CurrentCards } from './components/CurrentCard'
 import { MapView, type DrawMode } from './components/MapView'
 import { Methods } from './components/Methods'
+import { SeasonChart, SeasonLegend } from './components/SeasonChart'
+import { TopDays } from './components/TopDays'
 
 interface Loaded { model: Model; days: Days; regions: GeoJSON.FeatureCollection; cells: CellDays }
 
@@ -39,7 +41,10 @@ export function App() {
   const [bbox, setBbox] = useState({ west: '62', south: '50', east: '66', north: '54' })
   const [range, setRange] = useState({ from: 2024, to: 2026 })
   const [busy, setBusy] = useState('')
-  const calRef = useRef<SVGSVGElement>(null), annRef = useRef<SVGSVGElement>(null)
+  const [seasonRecent, setSeasonRecent] = useState(false)
+  const [topObserved, setTopObserved] = useState(false)
+  const calRef = useRef<SVGSVGElement>(null), annRef = useRef<SVGSVGElement>(null), seasonRef = useRef<SVGSVGElement>(null)
+  const mapRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     (async () => {
@@ -62,21 +67,23 @@ export function App() {
     const years = yearlyPeriods(daily, cal, bands)
     const ref = years.filter(y => y.year >= 2012 && y.year <= 2021).reduce((a, y) => a + y.harm, 0)
     return { months, years, clim: climatology(months, cal.lastYear), cmp: currentComparisons(daily, cal),
-             small: ref < 3000, max: calendarMax(months) }
-  }, [data, cal, area])
+             small: ref < 3000, max: calendarMax(months), season: seasonalProfile(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
+             top: topDays(daily, cal, 10, topObserved ? 2012 : 0) }
+  }, [data, cal, area, seasonRecent, topObserved])
 
-  // hotspots of the selected month, inside the area
+  // hotspots of the selected month (YYYY-MM) or day (YYYY-MM-DD), inside the area
   useEffect(() => {
     if (!selected) { setHotspots([]); setHotspotNote(''); return }
-    const [y, mo] = selected.split('-').map(Number)
+    const [y, mo, d] = selected.split('-').map(Number)
+    const isDay = selected.length === 10
     let live = true
     setHotspotNote('Loading hotspots…')
     loadHotspots(y).then(rows => {
       if (!live) return
-      const prefix = `${selected}-`
-      const hit = rows.filter(h => h.date.startsWith(prefix) && inArea(area, h.lat, h.lon, h.r))
+      const hit = rows.filter(h => (isDay ? h.date === selected : h.date.startsWith(`${selected}-`)) && inArea(area, h.lat, h.lon, h.r))
       setHotspots(hit)
-      setHotspotNote(`${hit.length.toLocaleString('en-US')} clean detections in ${MONTHS[mo - 1]} ${y} (orange MODIS, blue VIIRS)`)
+      const when = isDay ? `on ${d} ${MONTHS[mo - 1]} ${y}` : `in ${MONTHS[mo - 1]} ${y}`
+      setHotspotNote(`${hit.length.toLocaleString('en-US')} clean detections ${when} (orange MODIS, blue VIIRS)`)
     }).catch(e => live && setHotspotNote(`Could not load hotspots: ${e}`))
     return () => { live = false }
   }, [selected, area])
@@ -171,7 +178,7 @@ export function App() {
             {view.small && <p className="warn">Few fires in this area: monthly values, especially before 2012, are indicative only.</p>}
           </section>
 
-          <section className="panel mapbox">
+          <section className="panel mapbox" ref={mapRef}>
             <MapView regions={data.regions} area={area} hotspots={hotspots} staticMask={mask} drawMode={drawMode}
                      onDrawDone={a => { setArea(a); setDrawMode('none') }} onRegionClick={pickRegion} />
             <div className="row small">
@@ -191,7 +198,26 @@ export function App() {
           </section>
 
           <section className="panel">
-            <h2>3. Burning calendar, {firstYear}–{lastYear}</h2>
+            <h2>3. Fire season, week by week</h2>
+            <div className="row modes" role="radiogroup" aria-label="Reference years">
+              <span className="small">Compare with:</span>
+              <button role="radio" aria-checked={!seasonRecent} className={!seasonRecent ? 'on' : ''} onClick={() => setSeasonRecent(false)}>All years since 2001</button>
+              <button role="radio" aria-checked={seasonRecent} className={seasonRecent ? 'on' : ''} onClick={() => setSeasonRecent(true)}>Last 10 years</button>
+            </div>
+            <SeasonChart ref={seasonRef} season={view.season} />
+            <SeasonLegend season={view.season} />
+            <details className="help"><summary>What am I looking at?</summary>
+              Harmonized fire cell-days per week in the selected area. The black line is the median week of
+              {' '}{view.season.refYears[0]}–{view.season.refYears[1]} and the grey band the 10th–90th percentile of those years: the
+              usual fire season. Fire in Kazakhstan fell sharply after the 2000s, so "Last 10 years" gives a fairer picture of
+              what is usual today. The orange line is {view.season.year}, complete weeks only. Kazakhstan usually burns in two waves:
+              spring (field and pasture burning before sowing) and late summer to autumn (after the harvest). Weeks with satellite
+              outages are left out.
+            </details>
+          </section>
+
+          <section className="panel">
+            <h2>4. Burning calendar, {firstYear}–{lastYear}</h2>
             <div className="row modes" role="radiogroup" aria-label="What the calendar shows">
               {(Object.keys(MODE_LABEL) as Mode[]).map(k => (
                 <button key={k} role="radio" aria-checked={mode === k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>{MODE_LABEL[k]}</button>
@@ -208,7 +234,7 @@ export function App() {
           </section>
 
           <section className="panel">
-            <h2>4. Fire activity per year</h2>
+            <h2>5. Fire activity per year</h2>
             <AnnualChart ref={annRef} years={view.years} />
             <AnnualLegend />
             <details className="help"><summary>What am I looking at?</summary>
@@ -219,12 +245,32 @@ export function App() {
           </section>
 
           <section className="panel">
-            <h2>5. Download</h2>
+            <h2>6. Biggest fire days</h2>
+            <div className="row modes" role="radiogroup" aria-label="Which years">
+              <button role="radio" aria-checked={!topObserved} className={!topObserved ? 'on' : ''} onClick={() => setTopObserved(false)}>All years</button>
+              <button role="radio" aria-checked={topObserved} className={topObserved ? 'on' : ''} onClick={() => setTopObserved(true)}>Since 2012 (observed by VIIRS)</button>
+            </div>
+            <div className="tablewrap">
+              <TopDays days={view.top} selected={selected} onSelect={d => {
+                setSelected(d === selected ? null : d)
+                mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }} />
+            </div>
+            <details className="help"><summary>What am I looking at?</summary>
+              The ten days with the most harmonized fire cell-days in the selected area. A single extreme day can
+              hide inside an ordinary month: "Share of its month" shows how much of the month's burning happened that day.
+              Days before 2012 are modelled from MODIS and less certain than VIIRS days. "Show on map" draws that day's detections.
+            </details>
+          </section>
+
+          <section className="panel">
+            <h2>7. Download</h2>
             <div className="row">
               <button onClick={() => download('dala-fire_monthly.csv', seriesCsv(view.months, label, data.model.data_through))}>Monthly series (CSV)</button>
               <button onClick={() => download('dala-fire_yearly.csv', seriesCsv(view.years, label, data.model.data_through))}>Yearly series (CSV)</button>
               <button onClick={() => calRef.current && svgToPng(calRef.current, 'dala-fire_calendar.png')}>Calendar (PNG)</button>
               <button onClick={() => annRef.current && svgToPng(annRef.current, 'dala-fire_yearly.png')}>Yearly chart (PNG)</button>
+              <button onClick={() => seasonRef.current && svgToPng(seasonRef.current, 'dala-fire_season.png')}>Fire season (PNG)</button>
             </div>
             <div className="row">
               <span>Hotspots in this area from</span>

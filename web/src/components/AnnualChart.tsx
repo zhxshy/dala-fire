@@ -11,7 +11,7 @@ export const AnnualChart = forwardRef<SVGSVGElement, { years: Period[] }>(functi
   if (ys.length < 2) return null
   const x0 = ys[0].year, x1 = ys[ys.length - 1].year
   const max = Math.max(1, ...ys.map(y => Math.max(y.harm, y.naive, y.band?.[1] ?? 0)))
-  const nice = niceMax(max)
+  const { nice, ticks } = axis(max)
   const sx = (yr: number) => L + ((yr - x0) / (x1 - x0)) * (W - L - R)
   const sy = (v: number) => T + (1 - v / nice) * (H - T - B)
   const line = (pts: [number, number][]) => pts.map(([a, b], i) => `${i ? 'L' : 'M'}${sx(a).toFixed(1)},${sy(b).toFixed(1)}`).join('')
@@ -19,7 +19,6 @@ export const AnnualChart = forwardRef<SVGSVGElement, { years: Period[] }>(functi
   const area = banded.length > 1
     ? `${line(banded.map(y => [y.year, y.band![1]]))}L${[...banded].reverse().map(y => `${sx(y.year).toFixed(1)},${sy(y.band![0]).toFixed(1)}`).join('L')}Z`
     : ''
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => f * nice)
   const yearTicks = ys.map(y => y.year).filter(y => y % 5 === 0)
   return (
     <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Fire cell-days per year" className="annual">
@@ -57,10 +56,13 @@ export function AnnualLegend() {
   )
 }
 
-function niceMax(v: number) {
-  const p = Math.pow(10, Math.floor(Math.log10(v)))
-  for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p
-  return 10 * p
-}
 
 const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k` : String(Math.round(v)))
+
+/** Round axis: a step of 1, 2, 2.5 or 5 x 10^k giving four to six intervals. */
+function axis(v: number): { nice: number; ticks: number[] } {
+  const raw = v / 5, p = Math.pow(10, Math.floor(Math.log10(raw)))
+  const step = [1, 2, 2.5, 5, 10].map(m => m * p).find(s => s >= raw) ?? 10 * p
+  const nice = Math.ceil(v / step) * step
+  return { nice, ticks: Array.from({ length: Math.round(nice / step) + 1 }, (_, i) => i * step) }
+}
