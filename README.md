@@ -86,7 +86,7 @@ Every push to `main` builds the site and publishes it on GitHub Pages
   multiplied by a factor per 3-degree tile, fitted on 2012-2021 days when Terra, Aqua and S-NPP all
   delivered data and shrunk toward the national factor (2.005) where data is thin. Terra-only and
   Aqua-only days use a bridge factor fitted on 2003-2011. Days without S-NPP use NOAA-20 (x0.998) or
-  NOAA-21 (x1.036). The model is a sum over cells, so any area's value is exact in the browser.
+  NOAA-21 (x1.035). The model is a sum over cells, so any area's value is exact in the browser.
 
 ## Validation (leave-one-year-out, 2012-2021)
 
@@ -106,6 +106,35 @@ VIIRS activity falls where MODIS saw nothing (2.1% at 1 degree), so small areas 
 `error_by_count.csv` gives the observed/predicted spread by the size of the prediction; the app uses it
 as the uncertainty band.
 
+## Sensitivity (`scripts/07_sensitivity.py`)
+
+Each row changes one choice and reruns everything that depends on it. "Decline check" is harmonized
+MODIS 2003-2005 against S-NPP 2021-2025 (mean national cell-days per year), a quick check of the
+headline trend; a naive splice gives about 2.3x.
+
+| Variant (one change from the baseline) | MODIS factor | Country, median error | 3-degree tile, median | Tile, 90th pct | Backcast 2012 / 2013 | Decline check |
+| --- | --- | --- | --- | --- | --- | --- |
+| Baseline | 2.00 | 3.0% | 7.6% | 20.6% | +3.2% / -6.3% | 5.21x |
+| No confidence filter | 2.04 | 3.1% | 7.1% | 19.5% | +1.4% / -5.4% | 5.25x |
+| Stricter MODIS confidence (>= 50) | 2.31 | 3.8% | 8.6% | 21.5% | +4.7% / -8.3% | 5.17x |
+| Static mask without dilation | 2.02 | 3.1% | 7.9% | 21.9% | +2.8% / -6.6% | 5.08x |
+| No static mask | 2.08 | 3.9% | 8.8% | 25.5% | +2.2% / -8.2% | 4.88x |
+| Cell size 0.005 deg | 2.75 | 2.1% | 8.6% | 23.3% | +3.3% / -0.5% | 5.23x |
+| Cell size 0.02 deg | 1.70 | 3.8% | 6.5% | 19.3% | +3.1% / -8.3% | 5.11x |
+| Tiles 2 deg | 2.00 | 3.4% | 9.1% | 25.2% | +3.2% / -6.6% | 5.23x |
+| Tiles 5 deg | 2.00 | 3.3% | 7.1% | 20.5% | +3.7% / -4.9% | 5.18x |
+| Shrinkage 0 | 2.00 | 3.1% | 7.6% | 20.4% | +3.3% / -6.3% | 5.22x |
+| Shrinkage 50 | 2.00 | 3.0% | 7.6% | 20.5% | +3.3% / -6.3% | 5.21x |
+| Shrinkage 1000 | 2.00 | 3.0% | 7.8% | 20.4% | +3.0% / -6.1% | 5.19x |
+
+Across all 11 variants the country error stays between 2.1% and 3.9% (naive splice: 50.8%) and the
+decline between 4.9x and 5.3x. The factor itself moves with the cell size (1.70 at 0.02 degrees, 2.76
+at 0.005 degrees) because it converts between definitions, but the accuracy does not depend on it.
+Shrinkage hardly matters (tiles are data-rich); it is kept as a guard for thin tiles. The static mask
+matters most: without it the tile error rises to 8.8% (90th percentile 25.5%) because gas flares in
+the west inflate both sensors differently. No variant is better on every measure, so the baseline was
+not tuned to the test.
+
 `explore/` holds quick looks (national series, the 2012 seam figure). They are not part of the pipeline.
 
 ## Use of AI
@@ -115,5 +144,18 @@ in its docstring. Method choices and checks are the author's.
 
 ## Data citation
 
-NASA FIRMS: MODIS Collection 6.1 and VIIRS 375 m Collection 2 active fire products
-(https://firms.modaps.eosdis.nasa.gov). Add product DOIs before submission.
+We acknowledge the use of data and imagery from LANCE FIRMS, operated by NASA's Earth Science Data
+and Information System (ESDIS), with funding provided by NASA Headquarters
+(https://firms.modaps.eosdis.nasa.gov).
+
+- MODIS Collection 6.1 active fire, standard (MCD14ML): https://doi.org/10.5067/FIRMS/MODIS/MCD14ML
+- MODIS Collection 6.1 active fire, near real time (MCD14DL): https://doi.org/10.5067/FIRMS/MODIS/MCD14DL.NRT.0061
+- VIIRS 375 m, Suomi NPP: standard https://doi.org/10.5067/VIIRS/VNP14IMG.002, NRT https://doi.org/10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002
+- VIIRS 375 m, NOAA-20: standard https://doi.org/10.5067/VIIRS/VJ114IMG.002, NRT https://doi.org/10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002
+- VIIRS 375 m, NOAA-21: standard https://doi.org/10.5067/VIIRS/VJ214IMG.002, NRT https://doi.org/10.5067/VIIRS/VJ214IMG_NRT.002
+
+Algorithms: Giglio, Schroeder & Justice (2016), Remote Sensing of Environment 178, 31-41,
+https://doi.org/10.1016/j.rse.2016.02.054; Schroeder et al. (2014), Remote Sensing of Environment 143,
+85-96, https://doi.org/10.1016/j.rse.2013.12.008.
+
+Region boundaries: © OpenStreetMap contributors, ODbL.
