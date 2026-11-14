@@ -52,6 +52,19 @@ export function Methods({ model }: { model: Model }) {
         </tbody>
       </table>
       <ul>
+        {v.ratio_by_year && (
+          <li><b>The ratio does not depend on how much burns:</b> fitted on each calibration year separately, the national
+            VIIRS-to-MODIS ratio stays between {Math.min(...Object.values(v.ratio_by_year.ratio)).toFixed(2)} and
+            {' '}{Math.max(...Object.values(v.ratio_by_year.ratio)).toFixed(2)} ({Object.entries(v.ratio_by_year.ratio).map(([y, r]) => `${y}: ${r.toFixed(2)}`).join(', ')}),
+            while fire activity itself differed {v.ratio_by_year.fire_max_over_min}× between those years. This is the main reason to
+            trust one set of factors for years with much more fire, such as the 2000s.</li>
+        )}
+        {v.decline_single_sensor && (
+          <li><b>The decline is in each sensor on its own:</b> MODIS alone, never rescaled, shows
+            {' '}{v.decline_single_sensor.modis_2001_2005_to_2021_2025.toFixed(1)}× less fire in 2021–2025 than in 2001–2005 (harmonized record:
+            {' '}{v.decline_single_sensor.harmonized_2001_2005_to_2021_2025.toFixed(1)}×). VIIRS alone shows {v.decline_single_sensor.viirs_2012_2014_to_2021_2025.toFixed(1)}× less
+            in 2021–2025 than in 2012–2014. Harmonization does not create the decline; it lets the two periods be read on one scale.</li>
+        )}
         <li><b>Across the seam:</b> fitted on 2014–2021 only, the model predicts 2012 at {pct(v.backcast_2012_2013_pct['2012'])} and
           2013 at {pct(v.backcast_2012_2013_pct['2013'])}.</li>
         <li><b>Orbit drift:</b> Terra and Aqua drifted in their last years. Fitted on 2012–2021, the model errs by
@@ -63,6 +76,29 @@ export function Methods({ model }: { model: Model }) {
           the country error between 2.1% and 3.9% and the 2000s-to-2020s decline between 4.9× and 5.3×. The static-source mask matters most: without it the
           tile error rises from 7.6% to 8.8%. Separate day and night factors made every measure worse, so they are not used. Full table: <code>scripts/07_sensitivity.py</code> and the README.</li>
       </ul>
+
+      {v.check_by_region && <>
+        <h3>Region by region</h3>
+        <p>The same question for every region: on calibration days in 2012–2021, how close is MODIS × factors to what VIIRS saw,
+          year by year? The app shows this check for any area you select. The factors were fitted on these years for whole
+          3° tiles, so this is a fit check, not a blind test like the table above.</p>
+        <div className="tablewrap"><table>
+          <thead><tr><th>Region</th><th>VIIRS fire cell-days</th><th>Yearly totals, median difference</th><th>Worst year</th><th>All years together</th></tr></thead>
+          <tbody>
+            {v.check_by_region.map(r => (
+              <tr key={r.region}>
+                <td>{r.region}</td><td>{r.viirs_celldays.toLocaleString('en-US')}</td>
+                <td>{r.median_abs_pct === null ? 'too little fire' : `${r.median_abs_pct.toFixed(1)}%`}</td>
+                <td>{r.worst_abs_pct === null ? '–' : `${r.worst_abs_pct.toFixed(1)}%`}</td>
+                <td>{pct(r.bias_pct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+        <p>The method fails where fire is rare and comes from small steady heat sources: in Mangystau (oil and gas fields) and
+          in the cities MODIS sees about a third of what VIIRS sees, and one factor per tile cannot repair that. Values before
+          2012 are too low there.</p>
+      </>}
 
       <h3>Uncertainty for any area</h3>
       <p>Modelled values (before VIIRS) carry a band: the 10th–90th percentile of observed / predicted in the left-out years,
@@ -98,6 +134,9 @@ export function Methods({ model }: { model: Model }) {
         <li><b>Before 2012 there is no VIIRS to check against.</b> The factors assume that each tile’s VIIRS-to-MODIS ratio of
           2012–2021 also held in 2000–2011. That cannot be measured. The backcast tests it on two years only (2012 and 2013).
           If small fires were more common in the 2000s, the true ratio then was higher and our early values are too low.</li>
+        <li><b>These are satellite hot spots, not registered fires.</b> A fire cell-day is a ~1 km cell where a satellite saw
+          heat on a day. Official counts of fire incidents follow reporting rules, include fires too small or too short for a
+          satellite, and can rise while hot spots fall.</li>
         <li><b>No independent ground truth.</b> Every test compares what MODIS predicts with what VIIRS saw. The record has not
           been compared with burned-area maps or ground reports.</li>
         <li><b>The record shows when and where burning changed, not why.</b> The explanations for the decline (grazing, farming,

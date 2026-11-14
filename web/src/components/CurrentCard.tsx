@@ -4,7 +4,15 @@ import type { Comparison } from '../lib/aggregate'
 
 const fmt = (v: number) => (isFinite(v) ? Math.round(v).toLocaleString('en-US') : '–')
 
+/** Five-step level from the percentile among the reference years; null when there is too little to compare. */
+export function level(c: Comparison): string | null {
+  if (!isFinite(c.percentile) || c.nRef < 5 || c.covered / c.span < 0.8) return null
+  return c.percentile >= 90 ? 'Unusually high' : c.percentile >= 66 ? 'Above normal' : c.percentile > 33 ? 'Near normal'
+    : c.percentile > 10 ? 'Below normal' : 'Unusually low'
+}
+
 function verdict(c: Comparison) {
+  if (c.covered / c.span < 0.8) return `Satellite data for only ${c.covered} of ${c.span} days: too few to compare with other years.`
   if (!isFinite(c.percentile) || c.nRef < 5) return 'Not enough history in this area to compare.'
   if (c.value === 0 && c.median === 0) return 'No fire activity, as usual for this time of year.'
   const level = c.percentile >= 90 ? 'Unusually high' : c.percentile >= 66 ? 'Above normal' : c.percentile > 33 ? 'Near normal'
@@ -27,6 +35,9 @@ export function CurrentCards({ items }: { items: Comparison[] }) {
             {isFinite(c.p10) && <> (usual range {fmt(c.p10)}–{fmt(c.p90)})</>}
           </div>
           <div className="card-verdict">{verdict(c)}</div>
+          {c.covered < c.span && c.covered / c.span >= 0.8 && (
+            <div className="card-ref">Satellite data for {c.covered} of {c.span} days; days without data count as no fire, so the value may be low.</div>
+          )}
         </div>
       ))}
     </div>

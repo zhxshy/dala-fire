@@ -5,7 +5,7 @@ import type { Area } from './geo'
 
 export interface ViewState {
   area: Area; selected: string | null; mode: string; tab: 'explore' | 'world' | 'methods'
-  seasonRecent: boolean; topObserved: boolean; worldArea: Area
+  refRecent: boolean; topObserved: boolean; worldArea: Area
 }
 
 // the world view names countries by their number in the boundary file
@@ -55,7 +55,7 @@ export function readHash(regions: Region[], modes: string[]): Partial<ViewState>
   if (q.get('tab') === 'methods') out.tab = 'methods'
   if (q.get('tab') === 'world') out.tab = 'world'
   if (q.has('w')) out.worldArea = areaFromString(q.get('w')!, WORLD_IDS)
-  if (q.get('ref') === '10') out.seasonRecent = true
+  if (q.get('ref') === 'all') out.refRecent = false   // the default is the last 10 years
   if (q.get('top') === 'viirs') out.topObserved = true
   return out
 }
@@ -69,7 +69,7 @@ export function writeHash(s: ViewState, regions: Region[]): string {
   if (s.tab !== 'explore') q.push(`tab=${s.tab}`)
   const w = areaToString(s.worldArea, WORLD_IDS)
   if (w) q.push(`w=${w}`)
-  if (s.seasonRecent) q.push('ref=10')
+  if (!s.refRecent) q.push('ref=all')
   if (s.topObserved) q.push('top=viirs')
   const hash = q.length ? `#${q.join('&')}` : ''
   try { history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`) } catch { /* sandboxed frames */ }

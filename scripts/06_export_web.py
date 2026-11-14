@@ -87,9 +87,35 @@ write(web.sort_values(["d", "ci", "cj"]), "celldays.parquet")
 ds = pd.read_parquet(INT / "day_source.parquet")
 ds = ds[ds["date"] >= EPOCH]
 codes = ["NONE", "VNP", "VJ1", "VJ2", "MODIS", "TERRA", "AQUA"]
+# calibration days (Terra, Aqua and S-NPP all delivered data, inside the calibration window): the app uses them
+# to check MODIS x factors against VIIRS inside whatever area the user selects
+strata = json.loads((INT / "strata.json").read_text())
+up = (pd.read_parquet(INT / "sensor_availability.parquet").pivot(index="date", columns="sensor", values="available")
+      .fillna(False).astype(bool))
+w0, w1 = strata["modis_to_vnp"]["window"]
+cal_days = set(up.index[up[["MODIS_T", "MODIS_A", "VNP"]].all(axis=1) & (up.index >= w0) & (up.index <= w1)])
 (OUT / "days.json").write_text(json.dumps({
     "epoch": str(EPOCH.date()), "first": str(ds["date"].min().date()), "last": str(ds["date"].max().date()),
-    "codes": codes, "source": [codes.index(s) for s in ds["source"]]}, separators=(",", ":")))
+    "codes": codes, "source": [codes.index(s) for s in ds["source"]],
+    "cal": [int(d in cal_days) for d in ds["date"]]}, separators=(",", ":")))
+
+# --- the same check per region: MODIS x tile factor against S-NPP, yearly totals on calibration days -----------
+kt, k0, step = strata["modis_to_vnp"]["k_tile"], strata["modis_to_vnp"]["k_national"], int(round(float(strata["tile_deg"]) / RES))
+c = t[t["date"].isin(cal_days) & (t["r"] != 255)].copy()
+tile = ((c["ci"] // step) * 1000 + c["cj"] // step).astype(str)
+c["pred"] = np.where(c["m"].to_numpy() & 3, tile.map(kt).fillna(k0).to_numpy(), 0.0)
+c["viirs"] = (c["m"].to_numpy() & 4 > 0).astype(int)
+c["year"] = c["date"].dt.year
+by_region = []
+for r, g in c.groupby("r"):
+    yy = g.groupby("year")[["pred", "viirs"]].sum()
+    err = (yy["pred"] / yy["viirs"] - 1)[yy["viirs"] >= 30].abs() * 100      # years with too little fire are not scored
+    by_region.append({"region": regions[r]["en"], "viirs_celldays": int(g["viirs"].sum()), "years": int(len(err)),
+                      "median_abs_pct": round(float(err.median()), 1) if len(err) >= 5 else None,
+                      "worst_abs_pct": round(float(err.max()), 1) if len(err) >= 5 else None,
+                      "bias_pct": round(100 * float(g["pred"].sum() / max(g["viirs"].sum(), 1) - 1), 1)})
+by_region.sort(key=lambda x: -x["viirs_celldays"])
+pd.DataFrame(by_region).to_csv(INT / "check_by_region.csv", index=False)
 
 # --- hotspots per year (CSV download) ------------------------------------------------------------
 hs = pd.read_parquet(INT / "hotspots_clean.parquet",
@@ -111,7 +137,6 @@ mk = pd.read_parquet(INT / "static_mask_cells.parquet")
     np.round(np.c_[(mk["cj"] + 0.5) * RES, (mk["ci"] + 0.5) * RES], 3).tolist(), separators=(",", ":")))
 
 # --- model + validation ---------------------------------------------------------------------------
-strata = json.loads((INT / "strata.json").read_text())
 val = json.loads((INT / "validation.json").read_text())
 model = {"data_through": str(ds["date"].max().date()), "generated": pd.Timestamp.now(tz="UTC").isoformat(timespec="minutes"),
          "grid": {"res_deg": RES, "ci0": CI0, "cj0": CJ0, "epoch": str(EPOCH.date())},
@@ -120,8 +145,9 @@ model = {"data_through": str(ds["date"].max().date()), "generated": pd.Timestamp
                      "terra_bridge": strata["terra_bridge"]["b_national"], "aqua_bridge": strata["aqua_bridge"]["b_national"],
                      "vj1_to_vnp": strata["vj1_to_vnp"]["r"], "vj2_to_vnp": strata["vj2_to_vnp"]["r"],
                      "calibration_window": strata["modis_to_vnp"]["window"], "calibration_days": strata["modis_to_vnp"]["days"],
-                     "tile_deg": strata["tile_deg"]},
-         "validation": val}
+                     "tile_deg": strata["tile_deg"],
+                     "tiles": {k: round(v, 4) for k, v in strata["modis_to_vnp"]["k_tile"].items()}},
+         "validation": {**val, "check_by_region": by_region}}
 (OUT / "model.json").write_text(json.dumps(model, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
 
 sizes = {p.name: round(p.stat().st_size / 1e6, 2) for p in sorted(OUT.iterdir())}

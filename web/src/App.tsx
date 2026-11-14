@@ -2,8 +2,8 @@
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  buildCalendar, climatology, criticalPeriods, currentComparisons, dailySeries, meanYearly, monthlyPeriods, MONTHS, outlook,
-  seasonalProfile, seasonShift, topDays, weekLabel, weeklyGrid, yearlyPeriods,
+  areaCheck, buildCalendar, climatology, criticalPeriods, currentComparisons, dailySeries, meanYearly, monthlyPeriods, MONTHS, outlook,
+  regionsNow, seasonalProfile, seasonShift, topDays, weekLabel, weeklyGrid, yearlyPeriods,
 } from './lib/aggregate'
 import { download, hotspotsCsv, seriesCsv, svgToPng } from './lib/csv'
 import {
@@ -15,7 +15,7 @@ import { readHash, writeHash } from './lib/url'
 import { worldAvailable } from './lib/world'
 import { AnnualChart, AnnualLegend } from './components/AnnualChart'
 import { Calendar, CalendarLegend, calendarMax, MODE_LABEL, type Mode } from './components/Calendar'
-import { CurrentCards } from './components/CurrentCard'
+import { CurrentCards, level } from './components/CurrentCard'
 import { Intro } from './components/Intro'
 import { MapView, type DrawMode } from './components/MapView'
 import { Methods } from './components/Methods'
@@ -52,7 +52,7 @@ export function App() {
   const [bbox, setBbox] = useState({ west: '62', south: '50', east: '66', north: '54' })
   const [range, setRange] = useState({ from: 2024, to: 2026 })
   const [busy, setBusy] = useState('')
-  const [seasonRecent, setSeasonRecent] = useState(false)
+  const [refRecent, setRefRecent] = useState(true)   // reference years: the last 10, or all since 2001
   const [topObserved, setTopObserved] = useState(false)
   const calRef = useRef<SVGSVGElement>(null), annRef = useRef<SVGSVGElement>(null), seasonRef = useRef<SVGSVGElement>(null)
   const mapRef = useRef<HTMLElement>(null), calPanelRef = useRef<HTMLElement>(null)
@@ -72,15 +72,15 @@ export function App() {
       setWorldOn(hasWorld)
       if (h.worldArea) setWorldArea(h.worldArea)
       if (h.tab && (h.tab !== 'world' || hasWorld)) setTab(h.tab)
-      if (h.seasonRecent) setSeasonRecent(true)
+      if (h.refRecent === false) setRefRecent(false)
       if (h.topObserved) setTopObserved(true)
       setData({ model, days, regions, cells })
     })().catch(e => setError(String(e)))
   }, [])
 
   useEffect(() => {
-    if (data) writeHash({ area, selected, mode, tab, seasonRecent, topObserved, worldArea }, data.model.regions)
-  }, [data, area, selected, mode, tab, seasonRecent, topObserved, worldArea])
+    if (data) writeHash({ area, selected, mode, tab, refRecent, topObserved, worldArea }, data.model.regions)
+  }, [data, area, selected, mode, tab, refRecent, topObserved, worldArea])
 
   const cal = useMemo(() => (data ? buildCalendar(data.days) : null), [data])
 
@@ -103,13 +103,19 @@ export function App() {
     const months = monthlyPeriods(daily, cal, bands)
     const years = yearlyPeriods(daily, cal, bands)
     const ref = years.filter(y => y.year >= 2012 && y.year <= 2021).reduce((a, y) => a + y.harm, 0)
-    return { months, years, clim: climatology(months, cal.lastYear), cmp: currentComparisons(daily, cal),
-             small: ref < 3000, max: calendarMax(months), season: seasonalProfile(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
-             critical: criticalPeriods(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
-             ahead: outlook(daily, cal, seasonRecent ? cal.lastYear - 10 : 2001),
+    const refFirst = refRecent ? cal.lastYear - 10 : 2001
+    return { months, years, clim: climatology(months, cal.lastYear, refFirst), cmp: currentComparisons(daily, cal, refFirst),
+             small: ref < 3000, max: calendarMax(months), season: seasonalProfile(daily, cal, refFirst),
+             critical: criticalPeriods(daily, cal, refFirst), ahead: outlook(daily, cal, refFirst), refFirst,
              top: topDays(daily, cal, 10, topObserved ? 2012 : 0),
+             check: data.days.cal && data.model.factors.tiles
+               ? areaCheck(data.cells, m, cal, data.days.cal, data.model.factors.tiles, data.model.factors.modis_to_vnp_national, data.model.factors.tile_deg) : null,
              weeks: weeklyGrid(daily, cal), shift: seasonShift(months, cal.lastYear) }
-  }, [data, cal, area, seasonRecent, topObserved])
+  }, [data, cal, area, refRecent, topObserved])
+
+  // every region this month against its own reference years
+  const regionsThisMonth = useMemo(() => (data && cal
+    ? regionsNow(data.cells, cal, data.model.regions.length, refRecent ? cal.lastYear - 10 : 2001) : []), [data, cal, refRecent])
 
   // hotspots of the selected month (YYYY-MM) or day (YYYY-MM-DD), inside the area
   useEffect(() => {
@@ -149,7 +155,7 @@ export function App() {
   }
   const copyLink = async () => {
     if (!data) return
-    const url = writeHash({ area, selected, mode, tab, seasonRecent, topObserved, worldArea }, data.model.regions)
+    const url = writeHash({ area, selected, mode, tab, refRecent, topObserved, worldArea }, data.model.regions)
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { window.prompt('Copy this link', url) }
   }
 
@@ -174,6 +180,16 @@ export function App() {
 
   const firstYear = cal.year[0], lastYear = cal.lastYear
   const yearOptions = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
+  const refSwitch = (
+    <div className="row modes" role="radiogroup" aria-label="Reference years">
+      <span className="small">Compare with:</span>
+      <button role="radio" aria-checked={refRecent} className={refRecent ? 'on' : ''} onClick={() => setRefRecent(true)}>Last 10 years</button>
+      <button role="radio" aria-checked={!refRecent} className={!refRecent ? 'on' : ''} onClick={() => setRefRecent(false)}>All years since 2001</button>
+    </div>
+  )
+  const SMALL = 20   // below this many fire cell-days a region's level is noise
+  const above = regionsThisMonth.filter(r => r.cmp.value >= SMALL && ['Unusually high', 'Above normal'].includes(level(r.cmp) ?? ''))
+    .sort((a, b) => b.cmp.value - a.cmp.value)
 
   return (
     <div className="app">
@@ -251,21 +267,46 @@ export function App() {
 
           <section className="panel">
             <h2>2. This month compared with history</h2>
+            {refSwitch}
             <CurrentCards items={view.cmp} />
+            <div className="subhead">Regions, {view.cmp[0].label}</div>
+            <p className="small">
+              {above.length ? <>Above normal now: {above.slice(0, 4).map((r, i) => (
+                <span key={r.id}>{i > 0 && ', '}<button className="link" onClick={() => setArea({ kind: 'regions', ids: [r.id] })}>{regionName(r.id)}</button>
+                  {' '}({fmtN(r.cmp.value)} against a median of {fmtN(r.cmp.median)})</span>
+              ))}{above.length > 4 && ` and ${above.length - 4} more`}.</> : 'No region is above normal for these days.'}
+            </p>
+            <details><summary>All regions</summary>
+              <div className="tablewrap">
+                <table className="topdays">
+                  <thead><tr><th>Region</th><th>Level</th><th>Fire cell-days</th><th>Median {view.refFirst}–{lastYear - 1}</th><th>Usual range</th></tr></thead>
+                  <tbody>
+                    {regionsThisMonth.map(r => (
+                      <tr key={r.id} className={area.kind === 'regions' && area.ids.includes(r.id) ? 'on' : ''}>
+                        <td><button className="link" onClick={() => setArea({ kind: 'regions', ids: [r.id] })}>{regionName(r.id)}</button></td>
+                        <td>{r.cmp.value < SMALL && r.cmp.median < SMALL ? 'Too little fire to say' : level(r.cmp) ?? 'Not enough data'}</td>
+                        <td>{fmtN(r.cmp.value)}</td><td>{fmtN(r.cmp.median)}</td>
+                        <td>{Number.isFinite(r.cmp.p10) ? `${fmtN(r.cmp.p10)}–${fmtN(r.cmp.p90)}` : '–'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
             <details className="help"><summary>What am I looking at?</summary>
               Harmonized fire cell-days in the selected area for the latest days with data, compared with the same calendar
-              days in every earlier year since 2001. A fire cell-day is a ~1 km cell with at least one satellite fire detection
-              on a day, on the VIIRS S-NPP scale. "Usual range" is the 10th–90th percentile of earlier years.
+              days in {view.refFirst}–{lastYear - 1}. A fire cell-day is a ~1 km cell with at least one satellite fire detection
+              on a day, on the VIIRS S-NPP scale. "Usual range" is the 10th–90th percentile of those years. Fire in Kazakhstan
+              fell about five times after the 2000s, so against all years since 2001 almost every recent month looks low;
+              the last 10 years are the default because they describe what is usual today. The choice also sets the reference
+              for the fire season below and for the "Anomaly" view of the calendar. The regions list ranks every region against
+              its own history for the same days. Days are UTC days.
             </details>
           </section>
 
           <section className="panel">
             <h2>3. Fire season, week by week</h2>
-            <div className="row modes" role="radiogroup" aria-label="Reference years">
-              <span className="small">Compare with:</span>
-              <button role="radio" aria-checked={!seasonRecent} className={!seasonRecent ? 'on' : ''} onClick={() => setSeasonRecent(false)}>All years since 2001</button>
-              <button role="radio" aria-checked={seasonRecent} className={seasonRecent ? 'on' : ''} onClick={() => setSeasonRecent(true)}>Last 10 years</button>
-            </div>
+            {refSwitch}
             <div className="cards season-cards">
               <div className="card">
                 <div className="card-label">Critical periods</div>
@@ -322,7 +363,8 @@ export function App() {
               Each square is one month; darker blue means less fire, yellow means more (log scale). Switch to "Naive splice" to
               see the false jump in 2012 when VIIRS replaced MODIS, and back to "Harmonized" to see it removed. Hatched months
               before 2012 are modelled from MODIS; hover for the likely range. "Anomaly" compares each month with the median of
-              the same month in {2001}–{lastYear - 1}. Click a month to show its fires on the map.
+              the same month in {view.refFirst}–{lastYear - 1} (set by "Compare with" in section 2). Click a month to show its fires on
+              the map, or focus the calendar and move with the arrow keys.
             </details>
           </section>
 
@@ -330,6 +372,22 @@ export function App() {
             <h2>5. Fire activity per year</h2>
             <AnnualChart ref={annRef} years={view.years} />
             <AnnualLegend />
+            {view.check && (
+              <p className="small check">
+                <b>How well does the method work here?</b>{' '}
+                {view.check.years >= 5 && view.check.medianPct > 25
+                  ? <span className="warn-text">Poorly. On the days of 2012–2021 when all three satellites worked, MODIS × factors gives
+                      {' '}{Math.abs(view.check.biasPct).toFixed(0)}% {view.check.biasPct < 0 ? 'less' : 'more'} than VIIRS saw here (yearly
+                      totals differ by {view.check.medianPct.toFixed(0)}% in the median). Fire here is rare or comes from small steady
+                      heat sources that MODIS misses, such as industry. Do not rely on values before 2012 in this area.</span>
+                  : view.check.years >= 5
+                  ? <>On the days of 2012–2021 when Terra, Aqua and S-NPP all worked, MODIS × factors gives this area’s yearly totals
+                      within <b>{view.check.medianPct.toFixed(1)}%</b> of what VIIRS saw (median of {view.check.years} years; worst
+                      year {view.check.worstPct.toFixed(1)}%). The factors were fitted on these years for whole 3° tiles, not for this area.</>
+                  : <>Too little fire in this area in 2012–2021 to check ({fmtN(view.check.viirs)} VIIRS fire cell-days). Treat values
+                      before 2012 as indicative.</>}
+              </p>
+            )}
             <details className="help"><summary>What am I looking at?</summary>
               Yearly totals for the selected area. The red line is what you get by joining the raw records; the black line is
               the harmonized record. Before 2012 the shaded band is the model's 10th–90th percentile range. The current year
@@ -353,6 +411,8 @@ export function App() {
               The ten days with the most harmonized fire cell-days in the selected area. A single extreme day can
               hide inside an ordinary month: "Share of its month" shows how much of the month's burning happened that day.
               Days before 2012 are modelled from MODIS and less certain than VIIRS days. "Show on map" draws that day's detections.
+              Dates are UTC days, as in the NASA files: Kazakhstan is at UTC+5, so the satellite pass after local midnight is
+              counted with the previous date.
             </details>
           </section>
 

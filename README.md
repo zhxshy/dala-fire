@@ -26,7 +26,10 @@ outages are "no data", never zero.
 | --- | --- | --- |
 | Error of national yearly totals, each year of 2012-2021 left out in turn | 3.0% median (naive splice 50.8%) | Tests years with VIIRS; says nothing direct about 2000-2011 |
 | Error per 3-degree tile, same test | 7.6% median, 20.6% at the 90th percentile | Small areas and single months are worse (see the size table on the Methods page) |
-| The 2012 jump | harmonized 2.28x, MODIS alone 2.31x, naive 4.53x | Continuity at the switch, not that the factors are right before it |
+| The 2012 jump | harmonized 2.28x, MODIS alone 2.31x, naive 4.53x | Continuity at the switch, not that the factors are right before it; 2012 is also a calibration year, the backcast is the out-of-sample version |
+| VIIRS-to-MODIS ratio fitted on each calibration year separately | 1.95 to 2.13 in ten years, while yearly fire differed 4.3 times | Measured in 2012-2021 only |
+| Region by region: MODIS x factors against VIIRS, yearly totals 2012-2021 | 16 regions: 2.2% to 7.6% median, all years together within 3% | Fit check, not a blind test. Fails in Mangystau (71%) and Shymkent (65%): rare fire, steady industrial heat that MODIS misses |
+| The decline in one sensor alone, nothing rescaled | MODIS 5.0x (2001-2005 to 2021-2025), VIIRS 2.1x (2012-2014 to 2021-2025) | MODIS reads up to 9.5% low after 2021 (orbit drift) |
 | Backcast: factors from 2014-2021 predict 2012 and 2013 | +3.2% and -6.3% | Two years only |
 | Sensitivity: 12 variants, one choice changed at a time | national error 2.1-3.9%, decline 4.9-5.3x | Variants of one method family, on one country |
 | Outage detector against the FIRMS missing-data list | 127 of 178 listed days found independently | Only whole-day, country-wide gaps |
@@ -35,7 +38,10 @@ outages are "no data", never zero.
 splice shows 2.3 times and hides more than half of the decline.
 
 **What we cannot claim.** There is no VIIRS before 2012, so the factors assume each tile's VIIRS-to-MODIS ratio
-stayed the same; that cannot be measured. No independent ground truth was used. The record shows when and where
+stayed the same; that cannot be measured. No independent ground truth was used. Where fire is rare and comes
+from small steady heat sources (Mangystau oil fields, cities), MODIS sees about a third of what VIIRS sees and
+values before 2012 are too low; the app says so for any selected area. These are satellite hot spots,
+not registered fire incidents: official incident counts follow reporting rules and can move differently. The record shows when and where
 burning changed, not why. Single days and weeks before 2012 are less certain than months and years. The
 "next 4 weeks" card is a seasonal expectation, not a forecast. Fire power (FRP) is not harmonized.
 
@@ -102,6 +108,13 @@ npm run dev            # http://localhost:5173/dala-fire/
 
 Every push to `main` builds the site and publishes it on GitHub Pages
 (`.github/workflows/deploy.yml`). One-time setup: Settings -> Pages -> Source: GitHub Actions.
+Before building, the workflow type-checks the code and runs `npm run check`, which fails if a headline
+number in this README no longer matches `web/public/data/model.json`.
+
+"Unusual" is judged against the last 10 years by default, because fire fell about five times after the
+2000s and against 2001 onward almost every recent month looks low. One switch ("Compare with") changes
+the reference to all years since 2001 for the cards, the regions list, the fire season and the anomaly
+calendar. Dates are UTC days, as in the FIRMS files.
 
 ## Method
 

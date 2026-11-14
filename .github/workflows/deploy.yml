@@ -30,6 +30,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run check   # README numbers against model.json
       - run: npm run build
         env:
           BASE: /${{ github.event.repository.name }}/

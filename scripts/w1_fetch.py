@@ -38,7 +38,12 @@ import pandas as pd
 from common import ROOT
 
 BASE = "https://firms.modaps.eosdis.nasa.gov/data/country/zips/"
-PRODUCTS = {"modis": 2001, "viirs-snpp": 2012, "viirs-jpss1": 2018}   # product -> first year tried
+# product -> (first year tried, file-name prefixes tried in turn). The first prefix is the one FIRMS uses today;
+# the others are spellings seen elsewhere, tried only if the first is not found.
+PRODUCTS = {"modis": (2001, ["modis"]),
+            "viirs-snpp": (2012, ["viirs-snpp", "viirs_snpp", "suomi-viirs"]),
+            "viirs-jpss1": (2018, ["viirs-jpss1", "viirs_jpss1", "viirs-noaa20", "noaa-20"])}
+REQUIRED = {"modis": (2001, 2025), "viirs-snpp": (2012, 2025)}       # a year without these is not written
 RES, COARSE = 0.01, 50                     # fine cell in degrees; fine cells per 0.5 degree cell
 MODIS_CONF_MIN, MIN_STATIC = 30, 2
 EPOCH = np.datetime64("2000-01-01")
@@ -48,7 +53,7 @@ COLS = ["latitude", "longitude", "acq_date", "satellite", "confidence", "type"]
 
 
 def download(url, dest):
-    """Fetch url to dest. Returns size in MB, or None when the file does not exist (HTTP 404)."""
+    """Fetch url to dest. Returns size in MB, or None when the file does not exist (HTTP 403 or 404)."""
     for attempt in range(4):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (dala-fire world layer)"})
@@ -56,7 +61,11 @@ def download(url, dest):
                 shutil.copyfileobj(r, out, 1 << 20)
             return dest.stat().st_size / 1e6
         except urllib.error.HTTPError as e:
-            if e.code == 404:
+            if e.code in (403, 404):
+                return None
+            err = e
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, FileNotFoundError):                # file:// base used in tests
                 return None
             err = e
         except Exception as e:                                         # network hiccup: wait and retry
@@ -121,29 +130,40 @@ def country_celldays(parts):
 
 
 def country_of(member, product, year):
+    """Country name from 'viirs-snpp_2019_Afghanistan.csv' (any folder, any product spelling)."""
     stem = Path(member).stem
-    tag = f"{product}_{year}_"
+    tag = f"_{year}_"
     return stem.split(tag, 1)[1] if tag in stem else stem
 
 
 def process_year(year, base, tmp, keep):
     zips, info = {}, {}
-    for product, first in PRODUCTS.items():
+    for product, (first, prefixes) in PRODUCTS.items():
         if year < first:
             continue
-        url = f"{base.rstrip('/')}/{product}_{year}_all_countries.zip"
         dest = tmp / f"{product}_{year}.zip"
         t0 = time.time()
-        mb = dest.stat().st_size / 1e6 if dest.exists() else download(url, dest)
+        mb, url = (dest.stat().st_size / 1e6, "kept from an earlier run") if dest.exists() else (None, None)
+        for prefix in ([] if mb else prefixes):
+            url = f"{base.rstrip('/')}/{prefix}_{year}_all_countries.zip"
+            mb = download(url, dest)
+            if mb is not None:
+                break
         if mb is None:
-            print(f"  {product} {year}: not published (404)", flush=True)
+            lo, hi = REQUIRED.get(product, (1, 0))
+            if lo <= year <= hi:
+                raise SystemExit(f"  {product} {year}: not found under any of {prefixes} at {base}. "
+                                 f"This year is not written. Send this message back before running again.")
+            print(f"  {product} {year}: not published", flush=True)
             continue
         zips[product] = zipfile.ZipFile(dest)
         info[product] = {"url": url, "zip_mb": round(mb, 1), "download_s": round(time.time() - t0)}
         print(f"  {product} {year}: {mb:,.0f} MB in {time.time() - t0:,.0f} s", flush=True)
     if "modis" not in zips and "viirs-snpp" not in zips:
         return None
-    members = {p: {country_of(m, p, year): m for m in z.namelist() if m.lower().endswith(".csv")} for p, z in zips.items()}
+    members = {p: {country_of(m, p, year): m for m in z.namelist()
+                   if m.lower().endswith(".csv") and not Path(m).name.startswith(".") and "__MACOSX" not in m}
+               for p, z in zips.items()}
     countries = sorted(set().union(*[set(m) for m in members.values()]))
     cells, raws, n_det, failed = [], [], 0, []
     for c in countries:

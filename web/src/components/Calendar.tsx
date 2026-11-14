@@ -1,6 +1,6 @@
 // Burning calendar: years x months heatmap.
 // AI-assistance note: drafted with an AI coding assistant (Claude) and reviewed by the author.
-import { forwardRef } from 'react'
+import { forwardRef, type KeyboardEvent } from 'react'
 import { anomaly, MONTHS, type Climatology, type Period } from '../lib/aggregate'
 import { diverging, NO_DATA, sequential } from '../lib/colors'
 
@@ -31,8 +31,18 @@ export const Calendar = forwardRef<SVGSVGElement, Props>(function Calendar({ mon
   const years = [...new Set(months.map(p => p.year))]
   const max = Math.max(1, ...months.filter(p => !p.partial).map(p => Math.max(p.harm, p.naive)))
   const width = LEFT + 12 * CW + 4, height = TOP + years.length * CH + 4
+  // arrow keys move the selection: left/right one month, up/down one year
+  const onKey = (e: KeyboardEvent<SVGSVGElement>) => {
+    const step = ({ ArrowLeft: -1, ArrowRight: 1, ArrowUp: -12, ArrowDown: 12 } as Record<string, number>)[e.key]
+    if (!step) return
+    e.preventDefault()
+    const i = selected ? months.findIndex(p => p.key === selected.slice(0, 7)) : -1
+    const j = i < 0 ? months.length - 1 : Math.min(months.length - 1, Math.max(0, i + step))
+    if (months[j].key !== selected) onSelect(months[j].key)
+  }
   return (
-    <svg ref={ref} width={width} height={height} role="img" aria-label="Monthly burning calendar" className="calendar">
+    <svg ref={ref} width={width} height={height} role="group" tabIndex={0} onKeyDown={onKey} className="calendar"
+         aria-label="Monthly burning calendar. Arrow keys move between months and show that month's fires on the map.">
       <defs>
         <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" strokeWidth="1.3" strokeOpacity="0.55" />

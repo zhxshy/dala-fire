@@ -118,11 +118,11 @@ export function quantile(sorted: number[], q: number): number {
 
 export interface Climatology { median: number[]; p10: number[]; p90: number[] }
 
-/** Per calendar month: median and p10/p90 of complete, well-covered months REF_FIRST..lastYear-1. */
-export function climatology(months: Period[], lastYear: number): Climatology {
+/** Per calendar month: median and p10/p90 of complete, well-covered months refFirst..lastYear-1. */
+export function climatology(months: Period[], lastYear: number, refFirst = REF_FIRST): Climatology {
   const by: number[][] = Array.from({ length: 12 }, () => [])
   for (const p of months) {
-    if (p.month === null || p.partial || p.year < REF_FIRST || p.year >= lastYear) continue
+    if (p.month === null || p.partial || p.year < refFirst || p.year >= lastYear) continue
     if (p.daysWithData / p.days < 0.8) continue
     by[p.month].push(p.harm)
   }
@@ -141,10 +141,12 @@ export function anomaly(p: Period, c: Climatology): number {
 export interface Comparison {
   label: string; value: number; median: number; p10: number; p90: number
   percentile: number; nRef: number; refYears: [number, number]
+  covered: number; span: number   // days with satellite data in the period itself, and its length
 }
 
 /** Value of days dayFrom..dayTo of (year, month) vs the same days in earlier years. */
-function compareDays(s: Daily, cal: Calendar, year: number, month: number, dayFrom: number, dayTo: number, label: string): Comparison {
+function compareDays(s: Daily, cal: Calendar, year: number, month: number, dayFrom: number, dayTo: number, label: string,
+                     refFirst = REF_FIRST): Comparison {
   const sums = new Map<number, number>(), cover = new Map<number, number>()
   for (let k = 0; k < cal.nDays; k++) {
     if (cal.month[k] !== month || cal.dom[k] < dayFrom || cal.dom[k] > dayTo) continue
@@ -154,22 +156,32 @@ function compareDays(s: Daily, cal: Calendar, year: number, month: number, dayFr
   }
   const span = dayTo - dayFrom + 1
   const ref: number[] = []
-  for (const [y, v] of sums) if (y >= REF_FIRST && y < year && (cover.get(y) ?? 0) / span >= 0.8) ref.push(v)
+  for (const [y, v] of sums) if (y >= refFirst && y < year && (cover.get(y) ?? 0) / span >= 0.8) ref.push(v)
   ref.sort((a, b) => a - b)
   const value = sums.get(year) ?? 0
   const below = ref.filter(v => v < value).length, equal = ref.filter(v => v === value).length
   return { label, value, median: quantile(ref, 0.5), p10: quantile(ref, 0.1), p90: quantile(ref, 0.9),
            percentile: ref.length ? (100 * (below + equal / 2)) / ref.length : NaN, nRef: ref.length,
-           refYears: [REF_FIRST, year - 1] }
+           refYears: [refFirst, year - 1], covered: cover.get(year) ?? 0, span }
 }
 
-export function currentComparisons(s: Daily, cal: Calendar): Comparison[] {
+export function currentComparisons(s: Daily, cal: Calendar, refFirst = REF_FIRST): Comparison[] {
   const { lastYear: y, lastMonth: m, lastDom: d } = cal
-  const out = [compareDays(s, cal, y, m, 1, d, `${MONTHS[m]} 1–${d}, ${y}`)]
+  const out = [compareDays(s, cal, y, m, 1, d, `${MONTHS[m]} 1–${d}, ${y}`, refFirst)]
   const py = m === 0 ? y - 1 : y, pm = m === 0 ? 11 : m - 1
   const pdays = new Date(Date.UTC(py, pm + 1, 0)).getUTCDate()
-  out.push(compareDays(s, cal, py, pm, 1, pdays, `${MONTHS[pm]} ${py} (full month)`))
+  out.push(compareDays(s, cal, py, pm, 1, pdays, `${MONTHS[pm]} ${py} (full month)`, refFirst))
   return out
+}
+
+/** The latest month to date in every region against the same days of the reference years, most unusual first. */
+export function regionsNow(cells: CellDays, cal: Calendar, nRegions: number, refFirst = REF_FIRST): { id: number; cmp: Comparison }[] {
+  const harm = Array.from({ length: nRegions }, () => new Float64Array(cal.nDays))
+  for (let i = 0; i < cells.n; i++) if (cells.r[i] < nRegions) harm[cells.r[i]][cells.d[i]] += cells.h[i]
+  const { lastYear: y, lastMonth: m, lastDom: d } = cal
+  const rank = (c: Comparison) => (Number.isFinite(c.percentile) ? c.percentile : -1)
+  return harm.map((h, id) => ({ id, cmp: compareDays({ harm: h, modis: h, vnp: h }, cal, y, m, 1, d, '', refFirst) }))
+    .sort((a, b) => rank(b.cmp) - rank(a.cmp) || b.cmp.value - a.cmp.value)
 }
 
 // --- seasonal profile: weekly fire cell-days, median and p10-p90 of earlier years, current year on top ---
@@ -339,4 +351,34 @@ export function meanYearly(years: Period[], y0: number, y1: number): { harm: num
   const sel = years.filter(p => p.year >= y0 && p.year <= y1)
   const n = Math.max(1, sel.length)
   return { harm: sel.reduce((a, p) => a + p.harm, 0) / n, naive: sel.reduce((a, p) => a + p.naive, 0) / n }
+}
+
+// --- check inside the selected area: MODIS x factors against what VIIRS saw, calibration days only ---
+export interface AreaCheck { years: number; medianPct: number; worstPct: number; viirs: number; biasPct: number }
+
+/** Yearly totals of MODIS x tile factor against S-NPP inside the area, on days when Terra, Aqua and S-NPP all worked.
+ *  The factors were fitted on the same years for whole 3-degree tiles, so this is a fit check, not a blind test. */
+export function areaCheck(cells: CellDays, mask: Uint8Array, cal: Calendar, calDays: number[],
+                          tiles: Record<string, number>, kNational: number, tileDeg: number): AreaCheck {
+  const pred = new Map<number, number>(), obs = new Map<number, number>()
+  for (let i = 0; i < cells.n; i++) {
+    const k = cells.d[i]
+    if (!mask[i] || !calDays[k]) continue
+    const y = cal.year[k]
+    if (cells.m[i] & 3) {
+      const tile = Math.floor(cells.lat[i] / tileDeg) * 1000 + Math.floor(cells.lon[i] / tileDeg)
+      pred.set(y, (pred.get(y) ?? 0) + (tiles[tile] ?? kNational))
+    }
+    if (cells.m[i] & 4) obs.set(y, (obs.get(y) ?? 0) + 1)
+  }
+  const err: number[] = []
+  let viirs = 0, predicted = 0
+  for (const v of pred.values()) predicted += v
+  for (const [y, o] of obs) {
+    viirs += o
+    if (o >= 30) err.push(Math.abs((pred.get(y) ?? 0) / o - 1) * 100)   // years with too little fire are not scored
+  }
+  err.sort((a, b) => a - b)
+  return { years: err.length, medianPct: quantile(err, 0.5), worstPct: err.length ? err[err.length - 1] : NaN, viirs,
+           biasPct: viirs ? (predicted / viirs - 1) * 100 : NaN }
 }

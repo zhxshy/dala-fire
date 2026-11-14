@@ -147,7 +147,15 @@ seam = {"naive_splice": round(float(naive[yr.index == 2012][0] / naive[yr.index 
         "modis_only": round(float(yr.loc[2012, "modis_raw"] / yr.loc[2011, "modis_raw"]), 2),
         "harmonized": round(float(yr.loc[2012, "harmonized"] / yr.loc[2011, "harmonized"]), 2)}
 
-result = {"days_used": len(ok_days), "loyo_2012_2021": loyo, "error_vs_size": band.reset_index().to_dict("records"),
+# --- 6. is the ratio the same in every year, and is the decline there in each sensor on its own? ----
+by_year = cnt[cnt["year"] <= 2021].groupby("year")[["V", "M"]].sum()
+ratio_by_year = {"ratio": {str(y): round(float(r["V"] / r["M"]), 3) for y, r in by_year.iterrows()},
+                 "fire_max_over_min": round(float(by_year["V"].max() / by_year["V"].min()), 1)}
+single = {"modis_2001_2005_to_2021_2025": round(float(yr.loc[2001:2005, "modis_raw"].mean() / yr.loc[2021:2025, "modis_raw"].mean()), 1),
+          "viirs_2012_2014_to_2021_2025": round(float(yr.loc[2012:2014, "vnp_raw"].mean() / yr.loc[2021:2025, "vnp_raw"].mean()), 1),
+          "harmonized_2001_2005_to_2021_2025": round(float(yr.loc[2001:2005, "harmonized"].mean() / yr.loc[2021:2025, "harmonized"].mean()), 1)}
+
+result = {"days_used": len(ok_days), "loyo_2012_2021": loyo, "ratio_by_year": ratio_by_year, "decline_single_sensor": single, "error_vs_size": band.reset_index().to_dict("records"),
           "share_of_viirs_where_modis_zero_pct": zero, "backcast_2012_2013_pct": backcast,
           "drift_2022_2025_pct": drift, "seam_2011_to_2012_ratio": seam}
 (INT / "validation.json").write_text(json.dumps(result, indent=1, default=str))
@@ -177,3 +185,5 @@ print("\nS-NPP activity where MODIS saw nothing (% , by area-month size):", zero
 print("backcast 2012-2013 (fit 2014-2021), % error:", backcast)
 print("drift years 2022-2025 (fit 2012-2021), % error:", drift)
 print("seam 2011->2012:", seam)
+print("S-NPP / MODIS by calibration year:", ratio_by_year)
+print("decline in one sensor alone:", single)

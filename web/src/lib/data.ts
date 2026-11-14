@@ -16,6 +16,7 @@ export interface Model {
   factors: {
     modis_to_vnp_national: number; terra_bridge: number; aqua_bridge: number
     vj1_to_vnp: number; vj2_to_vnp: number; calibration_window: [string, string]; calibration_days: number; tile_deg: number
+    tiles?: Record<string, number>   // tile id -> MODIS-to-VIIRS factor; tile = floor(lat / 3) * 1000 + floor(lon / 3)
   }
   validation: {
     days_used: number
@@ -25,10 +26,13 @@ export interface Model {
     backcast_2012_2013_pct: Record<string, number>
     drift_2022_2025_pct: Record<string, number>
     seam_2011_to_2012_ratio: { naive_splice: number; modis_only: number; harmonized: number }
+    check_by_region?: { region: string; viirs_celldays: number; years: number; median_abs_pct: number | null; worst_abs_pct: number | null; bias_pct: number }[]
+    ratio_by_year?: { ratio: Record<string, number>; fire_max_over_min: number }
+    decline_single_sensor?: { modis_2001_2005_to_2021_2025: number; viirs_2012_2014_to_2021_2025: number; harmonized_2001_2005_to_2021_2025: number }
   }
 }
 
-export interface Days { epoch: string; first: string; last: string; codes: string[]; source: number[] }
+export interface Days { epoch: string; first: string; last: string; codes: string[]; source: number[]; cal?: number[] }
 
 /** Column arrays, one entry per (day, 0.01-degree cell) with a clean detection. */
 export interface CellDays {

@@ -105,3 +105,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
 .subhead { font-size: 14px; font-weight: 650; margin: 16px 0 6px; }
 .copied { font-size: 13px; color: var(--accent); }
 .intro-world { margin-bottom: 14px; font-size: 14px; }
+
+.calendar:focus-visible { outline: 2px solid #c4561a; outline-offset: 2px; }
+button.link { background: none; border: 0; padding: 0; color: #0b5cad; text-decoration: underline; cursor: pointer; font: inherit; }
+.warn-text { color: #9a3d00; }
+@media (max-width: 860px) { .methods { padding: 14px 14px; } .methods table { display: block; overflow-x: auto; max-width: 100%; } .methods code { overflow-wrap: anywhere; } }

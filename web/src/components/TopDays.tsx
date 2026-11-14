@@ -11,7 +11,7 @@ export function TopDays({ days, selected, onSelect }: { days: TopDay[]; selected
   if (!days.length) return <p className="small">No fire detected in this area.</p>
   return (
     <table className="topdays">
-      <thead><tr><th>#</th><th>Date</th><th>Fire cell-days</th><th>Share of its month</th><th>Seen by</th><th /></tr></thead>
+      <thead><tr><th>#</th><th>Date (UTC)</th><th>Fire cell-days</th><th>Share of its month</th><th>Seen by</th><th /></tr></thead>
       <tbody>
         {days.map((d, i) => (
           <tr key={d.date} className={selected === d.date ? 'on' : ''}>
