@@ -165,16 +165,22 @@ step = int(round(float(f["tile_deg"]) / RES))
 cd = clean.groupby(["date", "ci", "cj", "r", "sensor"]).size().reset_index()[["date", "ci", "cj", "r", "sensor"]]
 cd["bit"] = cd["sensor"].map(BIT)
 cd["src"] = cd["date"].map(source)
-k_tile = ((cd["ci"] // step) * 1000 + cd["cj"] // step).astype(str).map(tiles).fillna(k0)
+def tile_factor(ci, cj):
+    """MODIS-to-S-NPP factor of each cell's 3-degree tile, as float64 even for no rows (pandas 3 keeps str otherwise)."""
+    key = ((ci // step) * 1000 + cj // step).astype("int64").astype(str)
+    return pd.Series([float(tiles.get(k, k0)) for k in key], index=ci.index, dtype="float64")
+
+
+k_tile = tile_factor(cd["ci"], cd["cj"])
 use = {"VJ1": (cd["sensor"] == "VJ1", f["vj1_to_vnp"]), "VJ2": (cd["sensor"] == "VJ2", f["vj2_to_vnp"]),
        "TERRA": (cd["sensor"] == "MODIS_T", f["terra_bridge"] * k_tile), "AQUA": (cd["sensor"] == "MODIS_A", f["aqua_bridge"] * k_tile)}
-cd["h"] = 0.0
+cd["h"] = np.zeros(len(cd), dtype="float64")
 for name, (rows, value) in use.items():
     sel = rows & (cd["src"] == name)
     cd.loc[sel, "h"] = value[sel] if isinstance(value, pd.Series) else value
 agg = cd.groupby(["date", "ci", "cj", "r"]).agg(m=("bit", "sum"), h=("h", "sum")).reset_index()
 both = (agg["date"].map(source) == "MODIS") & (agg["m"] & 3 > 0)          # Terra or Aqua saw it: one MODIS cell-day
-agg.loc[both, "h"] = ((agg.loc[both, "ci"] // step) * 1000 + agg.loc[both, "cj"] // step).astype(str).map(tiles).fillna(k0)
+agg.loc[both, "h"] = tile_factor(agg.loc[both, "ci"], agg.loc[both, "cj"])
 
 # --- write back --------------------------------------------------------------------------------------------------
 g = model["grid"]
