@@ -1,6 +1,6 @@
 {
- "data_through": "2026-11-13",
- "generated": "2026-11-14T18:30+00:00",
+ "data_through": "2026-11-14",
+ "generated": "2026-11-15T10:03+00:00",
  "grid": {
   "res_deg": 0.01,
   "ci0": 4059,
@@ -509,5 +509,6 @@
     "bias_pct": -29.5
    }
   ]
- }
+ },
+ "updated_by": "scripts/09_update.py from FIRMS near-real-time data"
 }
